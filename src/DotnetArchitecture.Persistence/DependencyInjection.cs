@@ -1,0 +1,25 @@
+using DotnetArchitecture.Application.Interfaces;
+using DotnetArchitecture.Persistence.Context;
+using DotnetArchitecture.Persistence.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace DotnetArchitecture.Persistence;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddPersistenceServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        // 1. SQL Server bağlantısı
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+
+        // 2. Repository ve Unit of Work kayıtları (Scoped: Her HTTP isteğinde tek bir örnek)
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        return services;
+    }
+}

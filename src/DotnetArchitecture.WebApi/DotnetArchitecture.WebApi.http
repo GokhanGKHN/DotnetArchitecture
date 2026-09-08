@@ -1,0 +1,33 @@
+@Host = http://localhost:5294
+
+### 1. Yeni Ürün Ekle (POST Command)
+POST {{Host}}/api/products
+Content-Type: application/json
+
+{
+  "name": "",
+  "price": -50,
+  "initialStock": -5
+}
+
+### 2. Tüm Ürünleri Getir (GET Query)
+GET {{Host}}/api/products
+Accept: application/json
+
+### 3. Sipariş Oluştur (POST Command) - Yetersiz Stok Testi
+POST {{Host}}/api/orders
+Content-Type: application/json
+
+{
+  "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "items": [
+    {
+      "productId": "2d88c9cc-d7a5-4f22-8768-44db5d89ebcd",
+      "quantity": 50
+    }
+  ]
+}
+  
+
+
+
