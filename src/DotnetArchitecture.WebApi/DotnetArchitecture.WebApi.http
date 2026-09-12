@@ -14,7 +14,8 @@ Content-Type: application/json
 GET {{Host}}/api/products
 Accept: application/json
 
-### 3. Sipariş Oluştur (POST Command) - Yetersiz Stok Testi
+
+### 3. Sipariş Oluştur (POST Command)
 POST {{Host}}/api/orders
 Content-Type: application/json
 
@@ -23,10 +24,16 @@ Content-Type: application/json
   "items": [
     {
       "productId": "2d88c9cc-d7a5-4f22-8768-44db5d89ebcd",
-      "quantity": 50
+      "quantity": 1
     }
   ]
 }
+
+### 4. Sipariş Detayı Getir (GET Query)
+GET {{Host}}/api/orders/89605202-b2e0-4581-a6df-39321c7d528d
+Accept: application/json
+
+
   
 
 

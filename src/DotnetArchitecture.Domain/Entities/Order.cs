@@ -1,5 +1,6 @@
 using DotnetArchitecture.Domain.Common;
 using DotnetArchitecture.Domain.Enums;
+using DotnetArchitecture.Domain.Events;
 
 namespace DotnetArchitecture.Domain.Entities;
 
@@ -28,15 +29,15 @@ public class Order : BaseEntity
         if (Status != OrderStatus.Pending)
             throw new InvalidOperationException("Sadece beklemedeki siparişlere ürün eklenebilir.");
 
-        // Ürünün kendi stok kuralını çalıştırıyoruz                                                                                                   
         product.DeductStock(quantity);
 
-        // Kalemi ekliyoruz                                                                                                                            
         var item = new OrderItem(product.Id, quantity, product.Price);
         _items.Add(item);
 
-        // Toplam tutarı güncelliyoruz                                                                                                                 
         TotalAmount += item.TotalPrice;
+
+        // 💡 DOMAIN EVENT BURADA OLUŞTURULUYOR:                                                                                                                            
+        AddDomainEvent(new OrderCreatedDomainEvent(Id, CustomerId, TotalAmount));
     }
 
     // İŞ KURALI 2: Siparişi İptal Etme                                                                                                                
