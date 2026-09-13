@@ -43,6 +43,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         // 2. Diğer genel hatalar                                                                                                                                           
         var (statusCode, title) = exception switch
         {
+            DotnetArchitecture.Application.Common.Exceptions.IdempotencyConflictException => (StatusCodes.Status409Conflict, "Eşzamanlı İstek Çakışması (Idempotency Conflict)"),
             InvalidOperationException => (StatusCodes.Status400BadRequest, "İş Kuralı İhlali (Business Rule Violation)"),
             ArgumentException => (StatusCodes.Status400BadRequest, "Geçersiz İstek (Bad Request)"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Kayıt Bulunamadı (Not Found)"),

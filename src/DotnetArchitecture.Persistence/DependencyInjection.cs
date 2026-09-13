@@ -49,6 +49,9 @@ public static class DependencyInjection
 
         services.AddSingleton<ICacheService, Services.DistributedCacheService>();
 
+        // 5. Dağıtık Idempotency Servisi
+        services.AddSingleton<DotnetArchitecture.Application.Common.Idempotency.IIdempotencyService, Services.IdempotencyService>();
+
         return services;
     }
 }

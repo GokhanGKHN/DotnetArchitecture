@@ -20,9 +20,22 @@ public class OrdersController : ControllerBase
 
     // POST api/orders
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateOrderCommand command, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create(
+        [FromBody] CreateOrderCommand command,
+        [FromHeader(Name = "Idempotency-Key")] Guid? idempotencyKey,
+        CancellationToken cancellationToken)
     {
-        var orderId = await _mediator.Send(command, cancellationToken);
+        var finalCommand = idempotencyKey.HasValue
+            ? command with { IdempotencyKey = idempotencyKey.Value }
+            : command;
+
+        var orderId = await _mediator.Send(finalCommand, cancellationToken);
+
+        if (finalCommand.IdempotencyKey.HasValue)
+        {
+            Response.Headers["Idempotency-Key"] = finalCommand.IdempotencyKey.Value.ToString();
+        }
+
         return Ok(new { Id = orderId, Message = "Sipariş başarıyla oluşturuldu ve stoklar düşüldü." });
     }
 

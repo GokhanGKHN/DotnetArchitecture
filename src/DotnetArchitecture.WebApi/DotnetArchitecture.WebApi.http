@@ -116,6 +116,26 @@ Authorization: Bearer {{memberToken}}
   ]
 }
 
+### 3.2 Idempotent Sipariş Oluştur (Aynı Idempotency-Key ile Çift Gönderim Koruması)
+# Bu isteği peş peşe birden çok kez gönderdiğinizde:
+# - İlk istekte sipariş oluşturulur, stok düşülür ve sipariş ID'si döner.
+# - Sonraki isteklerde veritabanına ve stok düşmeye gitmeden AYNI sipariş ID'si anında (1-2 ms) döner!
+POST {{Host}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{memberToken}}
+Idempotency-Key: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
+
+{
+  "customerId": "89605202-b062-4aa8-9f37-123456789abc",
+  "items": [
+    {
+      "productId": "7da084e7-4786-42d4-bb06-08de7226f30e",
+      "quantity": 1,
+      "unitPrice": 8500.00
+    }
+  ]
+}
+
 
 ### =========================================================================
 ### 🏥 4. SAĞLIK DENETİMLERİ (HEALTH CHECKS)

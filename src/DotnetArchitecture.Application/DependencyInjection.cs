@@ -19,10 +19,13 @@ public static class DependencyInjection
             // Turnike 1: Kronometre başlasın (En dış halka - tüm süreyi ölçer)
             cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
 
-            // Turnike 2: Önbellek kontrolü (Cache varsa anında döner, DB ve validasyona gitmez)
+            // Turnike 2: Idempotency turnikesi (Mükerrer komut çağrılarında kayıtlı yanıtı döndürür)
+            cfg.AddOpenBehavior(typeof(IdempotencyBehavior<,>));
+
+            // Turnike 3: Önbellek kontrolü (Cache varsa anında döner, DB ve validasyona gitmez)
             cfg.AddOpenBehavior(typeof(CachingBehavior<,>));
 
-            // Turnike 3: Validasyon denetimi (Sadece cache miss olduğunda veya komutlarda çalışır)
+            // Turnike 4: Validasyon denetimi (Sadece cache miss olduğunda veya komutlarda çalışır)
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
 

@@ -8,7 +8,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Redis](https://img.shields.io/badge/Redis-7--Alpine-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL%20%26%20Redis-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/)
-[![Tests](https://img.shields.io/badge/Tests-48%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Tests](https://img.shields.io/badge/Tests-58%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -27,6 +27,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)](#8-dahili-istek-sınırlama-rate-limiting---rfc-6585)
   - [9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)](#9-otomatik-denetim-izi-audit-logging-ve-mantıksal-silme-soft-delete)
   - [10. Dağıtık Önbellekleme (Distributed Caching with Redis & IDistributedCache)](#10-dağıtık-önbellekleme-distributed-caching-with-redis--idistributedcache)
+  - [11. Idempotency Turnikesi (Idempotent Consumer Pattern)](#11-idempotency-turnikesi-idempotent-consumer-pattern)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -49,14 +50,14 @@ flowchart TD
 
     subgraph Application ["⚡ Application Katmanı (CQRS)"]
         Commands["Commands & Queries (MediatR)"]
-        Behaviors["Pipeline Turnikeleri (Performance, Caching, Validation)"]
+        Behaviors["Pipeline Turnikeleri (Performance, Idempotency, Caching, Validation)"]
         Events["Domain Event Handlers"]
-        AppInterfaces["Interfaces (IUnitOfWork, ICacheService, Repositories)"]
+        AppInterfaces["Interfaces (IUnitOfWork, ICacheService, IIdempotencyService, Repositories)"]
     end
 
     subgraph Persistence ["🗄️ Persistence Katmanı"]
         EFCore["Entity Framework Core (SQL Server)"]
-        RedisCache["DistributedCacheService (StackExchange.Redis)"]
+        RedisCache["DistributedCacheService & IdempotencyService (Redis)"]
         Interceptors["AuditableEntityInterceptor (Audit & Soft Delete)"]
         Repositories["Repository & UnitOfWork Implementasyonları"]
         OutboxTable["OutboxMessages Tablosu"]
@@ -84,9 +85,9 @@ flowchart TD
 | Katman | Sorumluluk ve Teknolojiler |
 | :--- | :--- |
 | **🧠 Domain** | Saf C#, Rich Domain Model, Aggregate Root (`Order`), Domain Events (`OrderCreatedDomainEvent`), Enums (`UserRole`, `OrderStatus`), Encapsulation, BaseEntity (`IAuditableEntity`, `ISoftDeletable`). Dış bağımlılık içermez. |
-| **⚡ Application** | CQRS Mimarisi (Commands & Queries), MediatR, DTO Sınıfları, Pipeline Turnikeleri (`PerformanceBehavior`, `CachingBehavior`, `ValidationBehavior`), FluentValidation, Soyutlamalar (`ICacheService`, `IUnitOfWork`, `IProductRepository`, `ICurrentUserService`). |
-| **🗄️ Persistence** | Entity Framework Core, SQL Server Express, StackExchange.Redis (`IDistributedCache`), `DistributedCacheService`, `AuditableEntityInterceptor`, Global Query Filters, Repository Pattern, Unit of Work, Outbox Tablosu, PBKDF2 Şifreleme ve JWT Token Üretici. |
-| **🌐 WebApi** | İnce Controller'lar (`AuthController`, `ProductsController`, `OrdersController`), Scalar UI & OpenAPI Dokümantasyonu, RFC 7807/9110 `ProblemDetails`, .NET 10 Rate Limiting, Health Checks (SQL + Redis), `ProcessOutboxMessagesBackgroundService` (Hosted Service). |
+| **⚡ Application** | CQRS Mimarisi (Commands & Queries), MediatR, DTO Sınıfları, Pipeline Turnikeleri (`PerformanceBehavior`, `IdempotencyBehavior`, `CachingBehavior`, `ValidationBehavior`), FluentValidation, Soyutlamalar (`ICacheService`, `IIdempotencyService`, `IUnitOfWork`, `IProductRepository`, `ICurrentUserService`). |
+| **🗄️ Persistence** | Entity Framework Core, SQL Server Express, StackExchange.Redis (`IDistributedCache`), `DistributedCacheService`, `IdempotencyService`, `AuditableEntityInterceptor`, Global Query Filters, Repository Pattern, Unit of Work, Outbox Tablosu, PBKDF2 Şifreleme ve JWT Token Üretici. |
+| **🌐 WebApi** | İnce Controller'lar (`AuthController`, `ProductsController`, `OrdersController`), Scalar UI & OpenAPI Dokümantasyonu, RFC 7807/9110 `ProblemDetails`, HTTP `Idempotency-Key` başlık desteği, .NET 10 Rate Limiting, Health Checks (SQL + Redis), `ProcessOutboxMessagesBackgroundService` (Hosted Service). |
 
 ---
 
@@ -102,10 +103,13 @@ HTTP İstek
 [ Turnike 1: PerformanceBehavior ] ──► Kronometreyi başlatır. İşlem 500 ms'yi aşarsa uyarı loglar.
    │
    ▼
-[ Turnike 2: CachingBehavior ] ─────► İstek 'ICacheableQuery' ise Redis / Dağıtık önbelleğe bakar (Cache HIT: 1 ms).
+[ Turnike 2: IdempotencyBehavior ] ──► Mükerrer komutsa (aynı Idempotency-Key) DB'ye gitmeden kayıtlı yanıtı döner (1 ms).
+   │                                   Eşzamanlı devam eden işlem varsa 409 Conflict fırlatır.
+   ▼
+[ Turnike 3: CachingBehavior ] ─────► İstek 'ICacheableQuery' ise Redis / Dağıtık önbelleğe bakar (Cache HIT: 1 ms).
    │                                   İstek 'ICacheInvalidator' ise işlem bitince ilgili önbellekleri temizler.
    ▼
-[ Turnike 3: ValidationBehavior ] ──► FluentValidation kurallarını denetler. Hatalıysa DB'ye gitmeden 400 döner.
+[ Turnike 4: ValidationBehavior ] ──► FluentValidation kurallarını denetler. Hatalıysa DB'ye gitmeden 400 döner.
    │
    ▼
 [ Handler ] ─────────────────────────► İş mantığı ve veritabanı operasyonu çalışır.
@@ -127,7 +131,7 @@ Veritabanına kayıt atarken aynı anda e-posta veya bildirim göndermenin yarat
 
 ### 5. Standart Hata Yönetimi (RFC 7807 / 9110 ProblemDetails)
 - `IExceptionHandler` arayüzü ile merkezi ve güvenli hata yakalama.
-- Validasyon hataları, iş kuralı ihlalleri (`InvalidOperationException`) ve bulunamadı durumları standart `application/problem+json` formatında döndürülür.
+- Validasyon hataları (`400 BadRequest`), iş kuralı ihlalleri (`400 BadRequest`), eşzamanlı istek çakışması (`409 Conflict`), bulunamadı durumları (`404 NotFound`) standart `application/problem+json` formatında döndürülür.
 
 ### 6. Specification Pattern (ISpecification ve Evaluator)
 Repository arayüzlerini yüzlerce özel sorgu metoduyla (`GetByNameAndPriceAndCategory...`) kirletmek yerine, sorgu mantığını (Filtre, Eager Loading `Include`, Sıralama ve Sayfalama) kapsülleyen **Domain-Driven Design (DDD)** deseni:
@@ -159,17 +163,26 @@ Mikroservis ve çoklu konteyner (Multi-replica) ortamlarında sunucuların belle
 - **Hata Toleransı (Graceful Degradation / Resilience):** Redis sunucusu geçici olarak kapalı veya erişilemez olduğunda sistem exception fırlatıp kullanıcı işlemini çökertmez; sessizce Cache Miss davranışı sergileyerek doğrudan veritabanından veri çekmeye devam eder.
 - **Otomatik Geçersiz Kılma (Cache Invalidation):** `ICacheInvalidator` uygulayan komutlar çalıştığında (`CreateProductCommand`), ilgili önbellek anahtarları otomatik olarak temizlenir.
 
+### 11. Idempotency Turnikesi (Idempotent Consumer Pattern)
+Özellikle ödeme alma, sipariş verme veya stok düşme gibi hassas ve durumu değiştiren işlemlerde ağ gecikmeleri veya kullanıcının mükerrer buton tıklamalarından kaynaklanan **çift sipariş ve çift para çekme riskini** ortadan kaldırır:
+- **`Idempotency-Key` HTTP Başlığı:** İstemci (Web/Mobil) istek başlığında benzersiz bir UUID gönderir (`Idempotency-Key: 9b1deb4d...`).
+- **`IdempotencyBehavior`:** Komut `IIdempotentCommand` arayüzünü uyguluyorsa turnike devreye girer.
+  - **İlk Çağrı (`FirstRun`):** Kilit alınır, sipariş veritabanına yazılır, stok düşülür ve nihai sonuç 24 saat süreyle Redis/Bellek deposuna kaydedilir.
+  - **Mükerrer Çağrı (`AlreadyProcessed` / Replay):** Handler ve veritabanı operasyonları **kesinlikle çalıştırılmaz**, stok tekrar düşülmez; önceki yanıt 1 ms içinde doğrudan döndürülür!
+  - **Eşzamanlı Çağrı (`InProgress` / Çakışma):** İlk istek henüz bitmemişken aynı anahtarla paralel ikinci bir istek gelirse `IdempotencyConflictException` fırlatılır ve istemciye `409 Conflict` dönülür.
+  - **Hata Güvenliği (Rollback):** Eğer işlem bir validasyon veya veritabanı hatasıyla sonlanırsa kilit derhal serbest bırakılır (`ReleaseAsync`), böylece istemci düzeltme yapıp aynı anahtarla tekrar deneyebilir.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **48 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **58 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
-├── ⚡ DotnetArchitecture.Application.UnitTests (17 Test) -> CQRS Handler'ları, CachingBehavior, Specification kuralları, Validation turnikeleri
-└── 🌐 DotnetArchitecture.IntegrationTests     (21 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting, Interceptors, DistributedCache)
+├── ⚡ DotnetArchitecture.Application.UnitTests (22 Test) -> CQRS Handler'ları, CachingBehavior, IdempotencyBehavior, Specifications, Validation
+└── 🌐 DotnetArchitecture.IntegrationTests     (26 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting, Interceptors, DistributedCache, Idempotency)
 ```
 
 Tüm testleri tek komutla koşturmak için:
@@ -179,11 +192,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (87 ms)
-Passed!  - Failed: 0, Passed: 17, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (127 ms)
-Passed!  - Failed: 0, Passed: 21, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (1 s)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (58 ms)
+Passed!  - Failed: 0, Passed: 22, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (134 ms)
+Passed!  - Failed: 0, Passed: 26, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (1 s)
 
-Toplam 48 Testin 48'i de BAŞARILI! ✅
+Toplam 58 Testin 58'i de BAŞARILI! ✅
 ```
 
 ---
@@ -199,8 +212,12 @@ DotnetArchitecture/
 │   │   └── Enums/                          # UserRole, OrderStatus
 │   │
 │   ├── DotnetArchitecture.Application/      # CQRS & İş Mantığı Katmanı
-│   │   ├── Behaviors/                      # Performance, Caching, Validation Turnikeleri
-│   │   ├── Common/                         # PagedResponse<T>, Specifications (ISpecification, BaseSpecification)
+│   │   ├── Behaviors/                      # Performance, Idempotency, Caching, Validation Turnikeleri
+│   │   ├── Common/
+│   │   │   ├── Exceptions/                 # IdempotencyConflictException (409 Conflict)
+│   │   │   ├── Idempotency/                # IIdempotentCommand, IIdempotencyService, IdempotencyCheckResult
+│   │   │   ├── Specifications/             # ISpecification, BaseSpecification
+│   │   │   └── PagedResponse<T>
 │   │   ├── Features/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
 │   │   │   ├── Products/                   # CreateProduct, GetAllProducts, Specifications
@@ -214,14 +231,14 @@ DotnetArchitecture/
 │   │   ├── Migrations/                     # EF Core Veritabanı Göçleri
 │   │   ├── Outbox/                         # OutboxMessage Entity
 │   │   ├── Repositories/                   # UnitOfWork, Repository Implementasyonları
-│   │   ├── Services/                       # DistributedCacheService, PasswordHasher, JwtTokenGenerator
+│   │   ├── Services/                       # IdempotencyService, DistributedCacheService, PasswordHasher, JwtTokenGenerator
 │   │   └── Specifications/                 # SpecificationEvaluator (EF Core Queryable Oluşturucu)
 │   │
 │   └── DotnetArchitecture.WebApi/           # API Sunum Katmanı
 │       ├── BackgroundServices/             # ProcessOutboxMessagesBackgroundService
 │       ├── Common/                         # HealthCheckResponseWriter (Standart JSON Raporu)
 │       ├── Controllers/                    # Auth, Products, Orders Controller'ları
-│       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails)
+│       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails & 409 Conflict)
 │       ├── Services/                       # CurrentUserService (IHttpContextAccessor ile Claims Erişimi)
 │       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri
 │
@@ -229,15 +246,15 @@ DotnetArchitecture/
 │   ├── DotnetArchitecture.Domain.UnitTests/      # Domain Birim Testleri
 │   │   └── Entities/                           # OrderTests, ProductTests, UserTests
 │   ├── DotnetArchitecture.Application.UnitTests/ # CQRS, Turnike ve Specification Birim Testleri
-│   │   ├── Behaviors/                          # ValidationBehavior, CachingBehavior Testleri
+│   │   ├── Behaviors/                          # ValidationBehavior, CachingBehavior, IdempotencyBehavior Testleri
 │   │   ├── Features/                           # Handler ve Validator Testleri
 │   │   └── Specifications/                     # ProductsFilter ve OrderWithItems Testleri
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
-│       ├── Controllers/                         # Auth, Products (Cache Invalidation) ve HealthChecks Testleri
+│       ├── Controllers/                         # Auth, Products, OrdersIdempotency ve HealthChecks Testleri
 │       ├── Interceptors/                        # AuditableEntityInterceptorTests (Audit & Soft Delete)
 │       ├── Middlewares/                         # RateLimitingTests (429 Too Many Requests)
-│       └── Services/                            # DistributedCacheServiceTests (Serialization & Resilience)
+│       └── Services/                            # DistributedCacheService, IdempotencyService Testleri
 │
 ├── .dockerignore                                # Docker derleme hariç tutma kuralları
 ├── .env.example                                 # Docker Compose ortam değişkenleri şablonu
@@ -333,11 +350,13 @@ Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/Dotne
    - `GET /api/products?pageSize=500` (Validation Turnikesi -> DB'ye gitmeden 400 Bad Request)
 4. **Outbox Pattern ile Sipariş:**
    - `POST /api/orders` (Sipariş anında onaylanır, arka plandaki worker 5 saniye içinde e-posta ve depo bildirimlerini dağıtır)
-5. **Sağlık Denetimleri (Health Checks):**
+5. **Idempotency ile Güvenli Sipariş:**
+   - `Idempotency-Key` başlığıyla `POST /api/orders` (İstek 10 kez art arda atılsa bile sipariş sadece 1 kez oluşturulur, stok yalnızca 1 kez düşülür ve aynı sipariş kimliği anında döndürülür!)
+6. **Sağlık Denetimleri (Health Checks):**
    - `GET /health` (API, SQL Server ve Redis bileşenlerinin milisaniye gecikmeli ayrıntılı JSON durum raporu)
    - `GET /health/live` (Konteyner Liveness probu -> `Healthy`)
    - `GET /health/ready` (Konteyner Readiness probu -> `Healthy`)
-6. **Kaba Kuvvet (Brute-Force) İstek Sınırlama:**
+7. **Kaba Kuvvet (Brute-Force) İstek Sınırlama:**
    - `POST /api/auth/login` (1 dakika içinde 11 kez istek atıldığında: `429 Too Many Requests` ve `Retry-After: 60`)
-7. **Dağıtık Önbellekleme & Invalidation:**
+8. **Dağıtık Önbellekleme & Invalidation:**
    - `GET /api/products` (Redis'e yazma/okuma ve Admin yeni ürün eklediğinde önbelleğin anında silinmesi)
