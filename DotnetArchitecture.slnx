@@ -5,4 +5,9 @@
     <Project Path="src/DotnetArchitecture.Persistence/DotnetArchitecture.Persistence.csproj" />
     <Project Path="src/DotnetArchitecture.WebApi/DotnetArchitecture.WebApi.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotnetArchitecture.Application.UnitTests/DotnetArchitecture.Application.UnitTests.csproj" />
+    <Project Path="tests/DotnetArchitecture.Domain.UnitTests/DotnetArchitecture.Domain.UnitTests.csproj" />
+    <Project Path="tests/DotnetArchitecture.IntegrationTests/DotnetArchitecture.IntegrationTests.csproj" />
+  </Folder>
 </Solution>
