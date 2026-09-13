@@ -1,9 +1,10 @@
+using DotnetArchitecture.Application.Common;
 using DotnetArchitecture.Application.Interfaces;
 using MediatR;
 
 namespace DotnetArchitecture.Application.Features.Products.Queries.GetAllProducts;
 
-public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, IReadOnlyList<ProductResponse>>
+public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, PagedResponse<ProductResponse>>
 {
     private readonly IProductRepository _productRepository;
 
@@ -12,16 +13,29 @@ public class GetAllProductsQueryHandler : IRequestHandler<GetAllProductsQuery, I
         _productRepository = productRepository;
     }
 
-    public async Task<IReadOnlyList<ProductResponse>> Handle(GetAllProductsQuery request, CancellationToken cancellationToken)
+    public async Task<PagedResponse<ProductResponse>> Handle(GetAllProductsQuery request, CancellationToken cancellationToken)
     {
-        var products = await _productRepository.GetAllAsync(cancellationToken);
+        var (products, totalCount) = await _productRepository.GetPagedAsync(
+            pageNumber: request.PageNumber,
+            pageSize: request.PageSize,
+            searchTerm: request.SearchTerm,
+            sortBy: request.SortBy,
+            isDescending: request.IsDescending,
+            cancellationToken: cancellationToken);
 
-        // Entity listesini DTO listesine dönüştürüyoruz (Mapping)                                                                                     
-        return products.Select(p => new ProductResponse(
+        // Entity listesini DTO listesine dönüştürüyoruz
+        var items = products.Select(p => new ProductResponse(
             p.Id,
             p.Name,
             p.Price,
             p.StockQuantity
         )).ToList();
+
+        return PagedResponse<ProductResponse>.Create(
+            items: items,
+            totalCount: totalCount,
+            pageNumber: request.PageNumber,
+            pageSize: request.PageSize
+        );
     }
 }

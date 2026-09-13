@@ -20,10 +20,17 @@ Content-Type: application/json
   "initialStock": 15
 }
 
-### 2. Tüm Ürünleri Getir (GET Query)
-GET {{Host}}/api/products
+### 2. Ürünleri Sayfala (GET Query - Sayfa 1, 2 Adet Ürün)
+GET {{Host}}/api/products?pageNumber=1&pageSize=2
 Accept: application/json
 
+### 2.1 Ürün Ara ve Sırala (Fiyata Göre Azalan - GET Query)
+GET {{Host}}/api/products?searchTerm=Logitech&sortBy=price&isDescending=true
+Accept: application/json
+
+### 2.2 Hatalı Sayfalama İsteği (Validation Testi - PageSize: 500)
+GET {{Host}}/api/products?pageNumber=1&pageSize=500
+Accept: application/json
 
 ### 3. Sipariş Oluştur (POST Command)
 POST {{Host}}/api/orders
@@ -42,9 +49,3 @@ Content-Type: application/json
 ### 4. Sipariş Detayı Getir (GET Query)
 GET {{Host}}/api/orders/89605202-b2e0-4581-a6df-39321c7d528d
 Accept: application/json
-
-
-  
-
-
-

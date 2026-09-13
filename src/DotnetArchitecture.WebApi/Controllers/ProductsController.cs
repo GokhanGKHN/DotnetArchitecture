@@ -24,11 +24,18 @@ public class ProductsController : ControllerBase
         return Ok(new { Id = productId, Message = "Ürün başarıyla oluşturuldu." });
     }
 
-    // GET api/products
+    // GET api/products?pageNumber=1&pageSize=10&searchTerm=logitech&sortBy=price&isDescending=true
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] bool isDescending = false,
+        CancellationToken cancellationToken = default)
     {
-        var products = await _mediator.Send(new GetAllProductsQuery(), cancellationToken);
-        return Ok(products);
+        var query = new GetAllProductsQuery(pageNumber, pageSize, searchTerm, sortBy, isDescending);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(result);
     }
 }
