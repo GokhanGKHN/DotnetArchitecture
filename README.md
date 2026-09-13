@@ -7,7 +7,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
-[![Tests](https://img.shields.io/badge/Tests-33%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Tests](https://img.shields.io/badge/Tests-34%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -23,6 +23,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [5. Standart Hata Yönetimi (RFC 7807 / 9110 ProblemDetails)](#5-standart-hata-yönetimi-rfc-7807--9110-problemdetails)
   - [6. Specification Pattern (ISpecification ve Evaluator)](#6-specification-pattern-ispecification-ve-evaluator)
   - [7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)](#7-canlılık-ve-hazırlık-sağlık-denetimleri-health-checks)
+  - [8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)](#8-dahili-istek-sınırlama-rate-limiting---rfc-6585)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -134,17 +135,23 @@ Cloud-native, Kubernetes ve Docker orkestrasyon standartlarına tam uyumlu yerle
 - **`/health/live` (Liveness Probe):** Yalnızca API sürecinin ayakta olup olmadığını denetler (Yanıt: `Healthy`). Süreç çökerse orkestratör konteyneri yeniden başlatır.
 - **`/health/ready` (Readiness Probe):** SQL Server veritabanına sorgu atabilirliğini denetler (`AddDbContextCheck<AppDbContext>`). Veritabanı yanıt vermiyorsa yük dengeleyici (Load Balancer) bu instance'a istek yönlendirmeyi geçici olarak durdurur.
 
+### 8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)
+.NET 10 yerleşik `Microsoft.AspNetCore.RateLimiting` middleware'i ile API uç noktaları kaba kuvvet (Brute-Force) ve DoS saldırılarına karşı korunur:
+- **`AuthPolicy` (Sıkı Güvenlik):** `/api/auth/login` ve `/api/auth/register` uç noktalarında IP başına 1 dakikada maksimum **10 istek** (Kuyruk: 0). Parola deneme botlarını anında durdurur.
+- **`GeneralPolicy` (Kaynak Koruma):** Genel API uç noktalarında (`Products`) IP başına 1 dakikada maksimum **100 istek**.
+- **Özelleştirilmiş 429 Yanıtı:** Limit aşıldığında istemciye standart `Retry-After: 60` HTTP başlığı ve RFC 7807/9110 `application/problem+json` formatında hata mesajı döndürülür.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **33 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **34 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
 ├── ⚡ DotnetArchitecture.Application.UnitTests (13 Test) -> CQRS Handler'ları, Specification kuralları, Validation turnikeleri
-└── 🌐 DotnetArchitecture.IntegrationTests     (10 Test) -> WebApplicationFactory + İzole InMemory DB (Auth, RBAC, HealthChecks)
+└── 🌐 DotnetArchitecture.IntegrationTests     (11 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting)
 ```
 
 Tüm testleri tek komutla koşturmak için:
@@ -154,11 +161,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (67 ms)
-Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (138 ms)
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (942 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (80 ms)
+Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (136 ms)
+Passed!  - Failed: 0, Passed: 11, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (980 ms)
 
-Toplam 33 Testin 33'ü de BAŞARILI! ✅
+Toplam 34 Testin 34'ü de BAŞARILI! ✅
 ```
 
 ---
@@ -207,7 +214,8 @@ DotnetArchitecture/
 │   │   └── Specifications/                     # ProductsFilter ve OrderWithItems Testleri
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
-│       └── Controllers/                         # Auth, Products ve HealthChecks Testleri
+│       ├── Controllers/                         # Auth, Products ve HealthChecks Testleri
+│       └── Middlewares/                         # RateLimitingTests (429 Too Many Requests)
 │
 ├── .dockerignore                                # Docker derleme hariç tutma kuralları
 ├── .env.example                                 # Docker Compose ortam değişkenleri şablonu
@@ -303,3 +311,6 @@ Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/Dotne
    - `GET /health` (API ve SQL Server bileşenlerinin milisaniye gecikmeli ayrıntılı JSON durum raporu)
    - `GET /health/live` (Konteyner Liveness probu -> `Healthy`)
    - `GET /health/ready` (Konteyner Readiness probu -> `Healthy`)
+6. **Kaba Kuvvet (Brute-Force) İstek Sınırlama:**
+   - `POST /api/auth/login` (1 dakika içinde 11 kez istek atıldığında: `429 Too Many Requests` ve `Retry-After: 60`)
+

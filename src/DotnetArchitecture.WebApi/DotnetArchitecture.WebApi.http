@@ -122,3 +122,21 @@ GET {{Host}}/health/live
 ### 4.3 Hazırlık Probu (Readiness Probe - SQL Server & Bağımlılıklar)
 GET {{Host}}/health/ready
 
+### =========================================================================
+### 🛡️ 5. İSTEK SINIRLAMA (RATE LIMITING)
+### =========================================================================
+
+### 5.1 Kaba Kuvvet (Brute-Force) Simülasyonu - Hızlı Ardışık Login
+# Bu isteği 1 dakika içinde 11 kez gönderdiğinizde 11. istekte:
+# Status: 429 Too Many Requests
+# Header: Retry-After: 60
+# Body: RFC 7807 ProblemDetails ("Çok fazla istek gönderdiniz...") dönecektir!
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "attacker@bruteforce.com",
+  "password": "WrongPassword!"
+}
+
+

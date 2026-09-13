@@ -2,11 +2,13 @@ using DotnetArchitecture.Application.Features.Auth.Commands.Login;
 using DotnetArchitecture.Application.Features.Auth.Commands.Register;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace DotnetArchitecture.WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("AuthPolicy")]
 public class AuthController : ControllerBase
 {
     private readonly ISender _mediator;
