@@ -7,6 +7,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
+[![Tests](https://img.shields.io/badge/Tests-25%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -20,9 +21,10 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [3. Veritabanı Düzeyinde Sayfalama, Sıralama ve Filtreleme](#3-veritabanı-düzeyinde-sayfalama-sıralama-ve-filtreleme)
   - [4. JWT Kimlik Doğrulama & Rol Yetkilendirme (RBAC)](#4-jwt-kimlik-doğrulama--rol-yetkilendirme-rbac)
   - [5. Standart Hata Yönetimi (RFC 7807 / 9110 ProblemDetails)](#5-standart-hata-yönetimi-rfc-7807--9110-problemdetails)
+- [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
-- [API Test Senaryoları](#-api-test-senaryoları)
+- [API Test Senaryoları (.http Dosyası)](#-api-test-senaryoları-http-dosyası)
 
 ---
 
@@ -120,6 +122,33 @@ Veritabanına kayıt atarken aynı anda e-posta veya bildirim göndermenin yarat
 
 ---
 
+## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
+
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **25 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+
+```text
+Test Projeleri Dağılımı:
+├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
+├── ⚡ DotnetArchitecture.Application.UnitTests (8 Test)  -> CQRS Handler'ları, FluentValidation, Turnike denetimleri
+└── 🌐 DotnetArchitecture.IntegrationTests     (7 Test)  -> WebApplicationFactory + İzole InMemory DB (Auth, RBAC 401/403/200)
+```
+
+Tüm testleri tek komutla koşturmak için:
+```bash
+dotnet test
+```
+
+Örnek Test Çıktısı:
+```text
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (63 ms)
+Passed!  - Failed: 0, Passed:  8, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (140 ms)
+Passed!  - Failed: 0, Passed:  7, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (937 ms)
+
+Toplam 25 Testin 25'i de BAŞARILI! ✅
+```
+
+---
+
 ## 📁 Proje Dizin Yapısı
 
 ```text
@@ -137,7 +166,7 @@ DotnetArchitecture/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
 │   │   │   ├── Products/                   # CreateProduct, GetAllProducts (Paging & Cache)
 │   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events
-│   │   └── Interfaces/                     # IUnitOfWork, IProductRepository, IUserRepository, Hasher vb.
+│   │   └── Interfaces/                     # IUnitOfWork, IProductRepository, IUserRepository vb.
 │   │
 │   ├── DotnetArchitecture.Persistence/      # Altyapı & Veritabanı Katmanı
 │   │   ├── Configurations/                 # Fluent API Entity Eşlemeleri (EF Core)
@@ -152,6 +181,17 @@ DotnetArchitecture/
 │       ├── Controllers/                    # Auth, Products, Orders Controller'ları
 │       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails)
 │       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri
+│
+├── tests/
+│   ├── DotnetArchitecture.Domain.UnitTests/      # Domain Birim Testleri
+│   │   └── Entities/                           # OrderTests, ProductTests, UserTests
+│   ├── DotnetArchitecture.Application.UnitTests/ # CQRS ve Turnike Birim Testleri
+│   │   ├── Behaviors/                          # ValidationBehavior Mock Testleri
+│   │   └── Features/                           # Handler ve Validator Testleri
+│   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
+│       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
+│       └── Controllers/                         # AuthController ve ProductsController Testleri
+│
 └── README.md
 ```
 
@@ -191,9 +231,9 @@ Uygulama başladığında Scalar API arayüzüne tarayıcınızdan erişebilirsi
 
 ---
 
-## 🧪 API Test Senaryoları
+## 🧪 API Test Senaryoları (.http Dosyası)
 
-Testleri çalıştırmak için `src/DotnetArchitecture.WebApi/DotnetArchitecture.WebApi.http` dosyasını VS Code (REST Client) veya Rider ile açıp istekleri doğrudan gönderebilirsiniz:
+Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/DotnetArchitecture.WebApi.http` dosyasını VS Code (REST Client) veya Rider ile açıp istekleri doğrudan gönderebilirsiniz:
 
 1. **Kullanıcı Kaydı & Giriş:**
    - `POST /api/auth/register` (Admin veya Member rolüyle kayıt)
