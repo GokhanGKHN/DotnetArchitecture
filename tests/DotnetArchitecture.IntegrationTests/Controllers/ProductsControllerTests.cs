@@ -91,4 +91,32 @@ public class ProductsControllerTests : IClassFixture<CustomWebApplicationFactory
         pagedResponse!.PageNumber.Should().Be(1);
         pagedResponse.PageSize.Should().Be(5);
     }
+
+    [Fact]
+    public async Task GetAll_WhenProductCreated_ShouldInvalidateCacheAndReturnUpdatedList()
+    {
+        // 1. Önce ürünleri listele (Cache Miss -> DB -> Cache'e yazılır)
+        _client.DefaultRequestHeaders.Authorization = null;
+        var firstResponse = await _client.GetAsync("/api/products?pageNumber=1&pageSize=10");
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var initialList = await firstResponse.Content.ReadFromJsonAsync<PagedResponse<ProductResponse>>();
+        var initialCount = initialList!.TotalCount;
+
+        // 2. Admin olarak yeni bir ürün oluştur (ICacheInvalidator turnikesi önbelleği temizler)
+        var adminToken = await GetTokenAsync(UserRole.Admin);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", adminToken);
+
+        var newProductName = $"Cached Monitor {Guid.NewGuid().ToString()[..6]}";
+        var createResponse = await _client.PostAsJsonAsync("/api/products", new CreateProductCommand(newProductName, 4500, 15));
+        createResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // 3. Tekrar listele (Önbellek temizlendiği için DB'den güncel veriyi çekmeli ve toplam sayı 1 artmalı)
+        _client.DefaultRequestHeaders.Authorization = null;
+        var secondResponse = await _client.GetAsync("/api/products?pageNumber=1&pageSize=10");
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updatedList = await secondResponse.Content.ReadFromJsonAsync<PagedResponse<ProductResponse>>();
+        updatedList!.TotalCount.Should().Be(initialCount + 1);
+        updatedList.Items.Should().Contain(p => p.Name == newProductName);
+    }
 }

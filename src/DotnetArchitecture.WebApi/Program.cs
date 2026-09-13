@@ -105,12 +105,22 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // 6. Health Checks (Sağlık Denetimleri) Kaydı
-builder.Services.AddHealthChecks()
+var healthChecksBuilder = builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy("API süreci aktif ve çalışıyor."), tags: ["live"])
     .AddDbContextCheck<DotnetArchitecture.Persistence.Context.AppDbContext>(
         name: "sqlserver",
         failureStatus: HealthStatus.Unhealthy,
         tags: ["ready", "db"]);
+
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    healthChecksBuilder.AddRedis(
+        redisConnectionString: redisConnectionString,
+        name: "redis",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["ready", "cache"]);
+}
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();

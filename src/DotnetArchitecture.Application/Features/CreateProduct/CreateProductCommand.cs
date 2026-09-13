@@ -7,5 +7,5 @@ namespace DotnetArchitecture.Application.Features.Products.Commands.CreateProduc
 // ICacheInvalidator sayesinde yeni ürün eklendiğinde "products-all" önbelleği otomatik temizlenir.
 public record CreateProductCommand(string Name, decimal Price, int InitialStock) : IRequest<Guid>, ICacheInvalidator
 {
-    public IReadOnlyCollection<string> CacheKeysToInvalidate => new[] { "products-all" };
+    public IReadOnlyCollection<string> CacheKeysToInvalidate => new[] { "products-all", "products-p1-s10-qall-bydefault-descFalse" };
 }

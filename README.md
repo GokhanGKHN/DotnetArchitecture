@@ -6,8 +6,9 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![C#](https://img.shields.io/badge/C%23-14.0-239120?logo=csharp&logoColor=white)](https://docs.microsoft.com/en-us/dotnet/csharp/)
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
-[![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
-[![Tests](https://img.shields.io/badge/Tests-37%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Redis](https://img.shields.io/badge/Redis-7--Alpine-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-MSSQL%20%26%20Redis-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/)
+[![Tests](https://img.shields.io/badge/Tests-48%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -25,6 +26,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)](#7-canlılık-ve-hazırlık-sağlık-denetimleri-health-checks)
   - [8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)](#8-dahili-istek-sınırlama-rate-limiting---rfc-6585)
   - [9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)](#9-otomatik-denetim-izi-audit-logging-ve-mantıksal-silme-soft-delete)
+  - [10. Dağıtık Önbellekleme (Distributed Caching with Redis & IDistributedCache)](#10-dağıtık-önbellekleme-distributed-caching-with-redis--idistributedcache)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -40,19 +42,22 @@ Proje, bağımlılıkların yalnızca içe doğru aktığı **Onion / Clean Arch
 flowchart TD
     subgraph WebApi ["🌐 WebApi Katmanı"]
         Controllers["İnce Controller'lar"]
-        Middlewares["Global Exception Handler"]
+        Middlewares["Global Exception Handler & Rate Limiter"]
+        HealthChecks["Liveness & Readiness Probes (SQL + Redis)"]
         BackgroundWorker["Outbox Background Worker"]
     end
 
     subgraph Application ["⚡ Application Katmanı (CQRS)"]
         Commands["Commands & Queries (MediatR)"]
-        Behaviors["Pipeline Behaviors (Performance, Caching, Validation)"]
+        Behaviors["Pipeline Turnikeleri (Performance, Caching, Validation)"]
         Events["Domain Event Handlers"]
-        AppInterfaces["Interfaces (IUnitOfWork, Repositories)"]
+        AppInterfaces["Interfaces (IUnitOfWork, ICacheService, Repositories)"]
     end
 
     subgraph Persistence ["🗄️ Persistence Katmanı"]
         EFCore["Entity Framework Core (SQL Server)"]
+        RedisCache["DistributedCacheService (StackExchange.Redis)"]
+        Interceptors["AuditableEntityInterceptor (Audit & Soft Delete)"]
         Repositories["Repository & UnitOfWork Implementasyonları"]
         OutboxTable["OutboxMessages Tablosu"]
         AuthServices["PBKDF2 Hasher & JWT Generator"]
@@ -78,10 +83,10 @@ flowchart TD
 
 | Katman | Sorumluluk ve Teknolojiler |
 | :--- | :--- |
-| **🧠 Domain** | Saf C#, Rich Domain Model, Aggregate Root (`Order`), Domain Events (`OrderCreatedDomainEvent`), Enums (`UserRole`, `OrderStatus`), Encapsulation ve İş Kuralları (Invariants). Dış bağımlılık içermez. |
-| **⚡ Application** | CQRS Mimarisi (Commands & Queries), MediatR, DTO Sınıfları, Pipeline Turnikeleri (`PerformanceBehavior`, `CachingBehavior`, `ValidationBehavior`), FluentValidation, `PagedResponse<T>` ve Arayüzler (`IUnitOfWork`, `IProductRepository`, `IUserRepository` vb.). |
-| **🗄️ Persistence** | Entity Framework Core, SQL Server Express (Docker), Fluent API Varlık Konfigürasyonları, Repository Pattern, Unit of Work, Transactional Outbox Tablosu (`OutboxMessages`), PBKDF2 Şifreleme ve JWT Token Üretici. |
-| **🌐 WebApi** | İnce Controller'lar (`AuthController`, `ProductsController`, `OrdersController`), Scalar UI & OpenAPI Dokümantasyonu, `IExceptionHandler` ile RFC 7807/9110 `ProblemDetails` hata formatı, JWT Bearer Yetkilendirme ve `ProcessOutboxMessagesBackgroundService` (Hosted Service). |
+| **🧠 Domain** | Saf C#, Rich Domain Model, Aggregate Root (`Order`), Domain Events (`OrderCreatedDomainEvent`), Enums (`UserRole`, `OrderStatus`), Encapsulation, BaseEntity (`IAuditableEntity`, `ISoftDeletable`). Dış bağımlılık içermez. |
+| **⚡ Application** | CQRS Mimarisi (Commands & Queries), MediatR, DTO Sınıfları, Pipeline Turnikeleri (`PerformanceBehavior`, `CachingBehavior`, `ValidationBehavior`), FluentValidation, Soyutlamalar (`ICacheService`, `IUnitOfWork`, `IProductRepository`, `ICurrentUserService`). |
+| **🗄️ Persistence** | Entity Framework Core, SQL Server Express, StackExchange.Redis (`IDistributedCache`), `DistributedCacheService`, `AuditableEntityInterceptor`, Global Query Filters, Repository Pattern, Unit of Work, Outbox Tablosu, PBKDF2 Şifreleme ve JWT Token Üretici. |
+| **🌐 WebApi** | İnce Controller'lar (`AuthController`, `ProductsController`, `OrdersController`), Scalar UI & OpenAPI Dokümantasyonu, RFC 7807/9110 `ProblemDetails`, .NET 10 Rate Limiting, Health Checks (SQL + Redis), `ProcessOutboxMessagesBackgroundService` (Hosted Service). |
 
 ---
 
@@ -97,7 +102,7 @@ HTTP İstek
 [ Turnike 1: PerformanceBehavior ] ──► Kronometreyi başlatır. İşlem 500 ms'yi aşarsa uyarı loglar.
    │
    ▼
-[ Turnike 2: CachingBehavior ] ─────► İstek 'ICacheableQuery' ise önce önbelleğe bakar (Cache HIT: 1 ms).
+[ Turnike 2: CachingBehavior ] ─────► İstek 'ICacheableQuery' ise Redis / Dağıtık önbelleğe bakar (Cache HIT: 1 ms).
    │                                   İstek 'ICacheInvalidator' ise işlem bitince ilgili önbellekleri temizler.
    ▼
 [ Turnike 3: ValidationBehavior ] ──► FluentValidation kurallarını denetler. Hatalıysa DB'ye gitmeden 400 döner.
@@ -128,13 +133,12 @@ Veritabanına kayıt atarken aynı anda e-posta veya bildirim göndermenin yarat
 Repository arayüzlerini yüzlerce özel sorgu metoduyla (`GetByNameAndPriceAndCategory...`) kirletmek yerine, sorgu mantığını (Filtre, Eager Loading `Include`, Sıralama ve Sayfalama) kapsülleyen **Domain-Driven Design (DDD)** deseni:
 - **`ISpecification<T>` & `BaseSpecification<T>`:** Filtre (`Criteria`), sıralama (`OrderBy`, `OrderByDescending`), ilişkiler (`Includes`) ve sayfalama (`Skip`, `Take`) kurallarını güçlü tipli nesneler halinde tanımlar (örn: `ProductsFilterSpecification`, `OrderWithItemsSpecification`).
 - **`SpecificationEvaluator<T>`:** EF Core sorgu ağacını (`IQueryable<T>`) arka planda dinamik olarak inşa eder; EF Core detaylarının Application veya Controller katmanına sızmasını (leak) engeller.
-- **Test Edilebilirlik:** Sorgu kuralları veritabanına gerek duymadan saf C# fonksiyonları gibi birim testlerine tabi tutulabilir.
 
 ### 7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)
 Cloud-native, Kubernetes ve Docker orkestrasyon standartlarına tam uyumlu yerleşik sağlık kontrolü uç noktaları:
-- **`/health` (Kapsamlı JSON Sağlık Raporu):** API ve SQL Server bağlantı durumunu, her bir bileşenin milisaniye cinsinden gecikmesini ve hata detaylarını döndürür (`HealthCheckResponseWriter`).
-- **`/health/live` (Liveness Probe):** Yalnızca API sürecinin ayakta olup olmadığını denetler (Yanıt: `Healthy`). Süreç çökerse orkestratör konteyneri yeniden başlatır.
-- **`/health/ready` (Readiness Probe):** SQL Server veritabanına sorgu atabilirliğini denetler (`AddDbContextCheck<AppDbContext>`). Veritabanı yanıt vermiyorsa yük dengeleyici (Load Balancer) bu instance'a istek yönlendirmeyi geçici olarak durdurur.
+- **`/health` (Kapsamlı JSON Sağlık Raporu):** API, SQL Server ve Redis bağlantı durumunu, milisaniye gecikmelerini ve ayrıntılı bileşen listesini döndürür (`HealthCheckResponseWriter`).
+- **`/health/live` (Liveness Probe):** Yalnızca API sürecinin ayakta olup olmadığını denetler (Yanıt: `Healthy`). Süreç çökerse konteyner orkestratörü süreci yeniden başlatır.
+- **`/health/ready` (Readiness Probe):** SQL Server ve Redis veritabanı bağlantılarını denetler. Kritik bağımlılıklar yanıt vermiyorsa yük dengeleyici (Load Balancer) bu sunucuya kullanıcı trafiği yönlendirmez.
 
 ### 8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)
 .NET 10 yerleşik `Microsoft.AspNetCore.RateLimiting` middleware'i ile API uç noktaları kaba kuvvet (Brute-Force) ve DoS saldırılarına karşı korunur:
@@ -144,21 +148,28 @@ Cloud-native, Kubernetes ve Docker orkestrasyon standartlarına tam uyumlu yerle
 
 ### 9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)
 EF Core `SaveChangesInterceptor` altyapısı sayesinde kod tekrarı olmaksızın merkezi veri güvenliği ve denetimi:
-- **`AuditableEntityInterceptor`:** Bir varlık eklendiğinde veya güncellendiğinde `CreatedAtUtc`, `CreatedBy`, `LastModifiedAtUtc`, `LastModifiedBy` alanları `ICurrentUserService` üzerinden (JWT taleplerinden) otomatik doldurulur. Geliştirici hiçbir Handler içinde tarih/kullanıcı atamakla uğraşmaz.
+- **`AuditableEntityInterceptor`:** Bir varlık eklendiğinde veya güncellendiğinde `CreatedAtUtc`, `CreatedBy`, `LastModifiedAtUtc`, `LastModifiedBy` alanları `ICurrentUserService` üzerinden (JWT taleplerinden) otomatik doldurulur.
 - **Mantıksal Silme (Soft Delete):** `context.Remove(entity)` çağrıldığında fiziksel `DELETE` sorgusu engellenir; durum otomatik olarak `Modified` yapılarak `IsDeleted = true`, `DeletedAtUtc`, `DeletedBy` atanır.
-- **Global Query Filter:** `AppDbContext.OnModelCreating` aşamasında tanımlanan filtre ile sistem genelindeki tüm sorgularda (`Where`, `Specification`, `GetAll`) silinmiş kayıtlar SQL seviyesinde (`WHERE IsDeleted = 0`) otomatik filtrelenir; gerektiğinde `.IgnoreQueryFilters()` ile geçmiş kayıtlar denetlenebilir.
+- **Global Query Filter:** `AppDbContext.OnModelCreating` aşamasında tanımlanan filtre ile sistem genelindeki tüm sorgularda silinmiş kayıtlar SQL seviyesinde (`WHERE IsDeleted = 0`) otomatik filtrelenir; gerektiğinde `.IgnoreQueryFilters()` ile geçmiş kayıtlar denetlenebilir.
+
+### 10. Dağıtık Önbellekleme (Distributed Caching with Redis & IDistributedCache)
+Mikroservis ve çoklu konteyner (Multi-replica) ortamlarında sunucuların bellek senkronizasyonu kaybını önleyen kurumsal dağıtık önbellek mimarisi:
+- **Dependency Inversion:** `Application` katmanı somut Redis kütüphanesini bilmez; saf `ICacheService` arayüzüne bağımlıdır.
+- **`DistributedCacheService`:** `Persistence` katmanında `Microsoft.Extensions.Caching.StackExchangeRedis` (`IDistributedCache`) üzerinden JSON UTF-8 byte dizisi serileştirmesiyle çalışır.
+- **Hata Toleransı (Graceful Degradation / Resilience):** Redis sunucusu geçici olarak kapalı veya erişilemez olduğunda sistem exception fırlatıp kullanıcı işlemini çökertmez; sessizce Cache Miss davranışı sergileyerek doğrudan veritabanından veri çekmeye devam eder.
+- **Otomatik Geçersiz Kılma (Cache Invalidation):** `ICacheInvalidator` uygulayan komutlar çalıştığında (`CreateProductCommand`), ilgili önbellek anahtarları otomatik olarak temizlenir.
 
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **37 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **48 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
-├── ⚡ DotnetArchitecture.Application.UnitTests (13 Test) -> CQRS Handler'ları, Specification kuralları, Validation turnikeleri
-└── 🌐 DotnetArchitecture.IntegrationTests     (14 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting, Interceptor)
+├── ⚡ DotnetArchitecture.Application.UnitTests (17 Test) -> CQRS Handler'ları, CachingBehavior, Specification kuralları, Validation turnikeleri
+└── 🌐 DotnetArchitecture.IntegrationTests     (21 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting, Interceptors, DistributedCache)
 ```
 
 Tüm testleri tek komutla koşturmak için:
@@ -168,11 +179,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (70 ms)
-Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (138 ms)
-Passed!  - Failed: 0, Passed: 14, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (983 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (87 ms)
+Passed!  - Failed: 0, Passed: 17, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (127 ms)
+Passed!  - Failed: 0, Passed: 21, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (1 s)
 
-Toplam 37 Testin 37'si de BAŞARILI! ✅
+Toplam 48 Testin 48'i de BAŞARILI! ✅
 ```
 
 ---
@@ -194,7 +205,7 @@ DotnetArchitecture/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
 │   │   │   ├── Products/                   # CreateProduct, GetAllProducts, Specifications
 │   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events, Specifications
-│   │   └── Interfaces/                     # IUnitOfWork, ICurrentUserService, IProductRepository vb.
+│   │   └── Interfaces/                     # IUnitOfWork, ICacheService, ICurrentUserService, IProductRepository vb.
 │   │
 │   ├── DotnetArchitecture.Persistence/      # Altyapı & Veritabanı Katmanı
 │   │   ├── Configurations/                 # Fluent API Entity Eşlemeleri (EF Core)
@@ -203,7 +214,7 @@ DotnetArchitecture/
 │   │   ├── Migrations/                     # EF Core Veritabanı Göçleri
 │   │   ├── Outbox/                         # OutboxMessage Entity
 │   │   ├── Repositories/                   # UnitOfWork, Repository Implementasyonları
-│   │   ├── Services/                       # PBKDF2 PasswordHasher, JwtTokenGenerator
+│   │   ├── Services/                       # DistributedCacheService, PasswordHasher, JwtTokenGenerator
 │   │   └── Specifications/                 # SpecificationEvaluator (EF Core Queryable Oluşturucu)
 │   │
 │   └── DotnetArchitecture.WebApi/           # API Sunum Katmanı
@@ -218,18 +229,19 @@ DotnetArchitecture/
 │   ├── DotnetArchitecture.Domain.UnitTests/      # Domain Birim Testleri
 │   │   └── Entities/                           # OrderTests, ProductTests, UserTests
 │   ├── DotnetArchitecture.Application.UnitTests/ # CQRS, Turnike ve Specification Birim Testleri
-│   │   ├── Behaviors/                          # ValidationBehavior Mock Testleri
+│   │   ├── Behaviors/                          # ValidationBehavior, CachingBehavior Testleri
 │   │   ├── Features/                           # Handler ve Validator Testleri
 │   │   └── Specifications/                     # ProductsFilter ve OrderWithItems Testleri
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
-│       ├── Controllers/                         # Auth, Products ve HealthChecks Testleri
+│       ├── Controllers/                         # Auth, Products (Cache Invalidation) ve HealthChecks Testleri
 │       ├── Interceptors/                        # AuditableEntityInterceptorTests (Audit & Soft Delete)
-│       └── Middlewares/                         # RateLimitingTests (429 Too Many Requests)
+│       ├── Middlewares/                         # RateLimitingTests (429 Too Many Requests)
+│       └── Services/                            # DistributedCacheServiceTests (Serialization & Resilience)
 │
 ├── .dockerignore                                # Docker derleme hariç tutma kuralları
 ├── .env.example                                 # Docker Compose ortam değişkenleri şablonu
-├── docker-compose.yml                           # MSSQL + WebApi çoklu konteyner orkestrasyonu
+├── docker-compose.yml                           # MSSQL + Redis + WebApi çoklu konteyner orkestrasyonu
 └── README.md
 ```
 
@@ -241,19 +253,19 @@ Projeyi çalıştırmak için iki pratik yöntem bulunmaktadır:
 
 ### 🌟 Seçenek A: Docker Compose ile Tek Komutta Çalıştırma (Önerilen)
 
-Sisteminizde yalnızca Docker yüklü olması yeterlidir. SQL Server ve WebApi birbirine bağlı olarak otomatik ayağa kalkar:
+Sisteminizde yalnızca Docker yüklü olması yeterlidir. SQL Server, Redis ve WebApi birbirine bağlı ve sağlıklı olarak otomatik ayağa kalkar:
 
 ```bash
 # 1. Depoyu klonlayıp dizine geçin
 git clone https://github.com/GokhanGKHN/DotnetArchitecture.git
 cd DotnetArchitecture
 
-# 2. MSSQL ve WebApi'yi arka planda başlatın
+# 2. MSSQL, Redis ve WebApi'yi arka planda başlatın
 docker compose up -d
 ```
 
 > [!TIP]
-> **Otomatik Sağlık Denetimi & Migration:** WebApi servisi, SQL Server'ın ayağa kalkıp sorgu kabul etmesini (`healthcheck: service_healthy`) bekler. Başlatıldığında veritabanı tablolarını (`AppDbContext.Database.MigrateAsync`) otomatik oluşturur!
+> **Otomatik Sağlık Denetimi & Migration:** WebApi servisi, SQL Server ve Redis'in ayağa kalkıp sorgu kabul etmesini (`healthcheck: service_healthy`) bekler. Başlatıldığında veritabanı tablolarını (`AppDbContext.Database.MigrateAsync`) otomatik oluşturur!
 
 API arayüzüne anında erişin:
 👉 `http://localhost:5294/scalar/v1`
@@ -274,11 +286,15 @@ Eğer yerel makinenizde geliştirme yapmak isterseniz:
 - [Docker Desktop](https://www.docker.com/) veya yüklü bir Docker motoru
 - `dotnet-ef` CLI aracı (`dotnet tool install --global dotnet-ef`)
 
-#### 1. Yalnızca SQL Server Konteynerini Başlatın
+#### 1. SQL Server ve Redis Konteynerlerini Başlatın
 ```bash
+# MSSQL
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourPassword123." \
    -p 1433:1433 --name mssql_express -d \
    mcr.microsoft.com/mssql/server:2022-latest
+
+# Redis
+docker run -d --name redis_dev -p 6379:6379 redis:7-alpine
 ```
 
 #### 2. Güvenli Bağlantı Dizesini (User Secrets) Tanımlayın
@@ -318,9 +334,10 @@ Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/Dotne
 4. **Outbox Pattern ile Sipariş:**
    - `POST /api/orders` (Sipariş anında onaylanır, arka plandaki worker 5 saniye içinde e-posta ve depo bildirimlerini dağıtır)
 5. **Sağlık Denetimleri (Health Checks):**
-   - `GET /health` (API ve SQL Server bileşenlerinin milisaniye gecikmeli ayrıntılı JSON durum raporu)
+   - `GET /health` (API, SQL Server ve Redis bileşenlerinin milisaniye gecikmeli ayrıntılı JSON durum raporu)
    - `GET /health/live` (Konteyner Liveness probu -> `Healthy`)
    - `GET /health/ready` (Konteyner Readiness probu -> `Healthy`)
 6. **Kaba Kuvvet (Brute-Force) İstek Sınırlama:**
    - `POST /api/auth/login` (1 dakika içinde 11 kez istek atıldığında: `429 Too Many Requests` ve `Retry-After: 60`)
-
+7. **Dağıtık Önbellekleme & Invalidation:**
+   - `GET /api/products` (Redis'e yazma/okuma ve Admin yeni ürün eklediğinde önbelleğin anında silinmesi)

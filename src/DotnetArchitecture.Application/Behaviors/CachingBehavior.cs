@@ -1,19 +1,21 @@
 using DotnetArchitecture.Application.Interfaces;
 using MediatR;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace DotnetArchitecture.Application.Behaviors;
 
+/// <summary>
+/// MediatR isteklerini araya girerek yakalayan ve ICacheService üzerinden dağıtık/yerel önbellek operasyonlarını yöneten turnike.
+/// </summary>
 public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
-    private readonly IMemoryCache _cache;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<CachingBehavior<TRequest, TResponse>> _logger;
 
-    public CachingBehavior(IMemoryCache cache, ILogger<CachingBehavior<TRequest, TResponse>> logger)
+    public CachingBehavior(ICacheService cacheService, ILogger<CachingBehavior<TRequest, TResponse>> logger)
     {
-        _cache = cache;
+        _cacheService = cacheService;
         _logger = logger;
     }
 
@@ -27,7 +29,8 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         {
             var cacheKey = cacheableQuery.CacheKey;
 
-            if (_cache.TryGetValue(cacheKey, out TResponse? cachedResponse) && cachedResponse is not null)
+            var cachedResponse = await _cacheService.GetAsync<TResponse>(cacheKey, cancellationToken);
+            if (cachedResponse is not null)
             {
                 _logger.LogInformation("⚡ [CACHE HIT] Veri önbellekten getirildi: {CacheKey}", cacheKey);
                 return cachedResponse;
@@ -39,7 +42,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
             var response = await next(cancellationToken);
 
             var expiration = cacheableQuery.Expiration ?? TimeSpan.FromMinutes(5);
-            _cache.Set(cacheKey, response, expiration);
+            await _cacheService.SetAsync(cacheKey, response, expiration, cancellationToken);
 
             _logger.LogInformation("💾 [CACHE SET] Veri önbelleğe yazıldı ({Expiration} süreyle): {CacheKey}", expiration, cacheKey);
 
@@ -55,7 +58,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
             // Başarılı olduktan sonra ilgili önbellek anahtarlarını temizle
             foreach (var key in invalidator.CacheKeysToInvalidate)
             {
-                _cache.Remove(key);
+                await _cacheService.RemoveAsync(key, cancellationToken);
                 _logger.LogInformation("🧹 [CACHE INVALIDATED] Önbellek anahtarı temizlendi: {CacheKey}", key);
             }
 

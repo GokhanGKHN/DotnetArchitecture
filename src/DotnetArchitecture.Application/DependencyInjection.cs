@@ -11,10 +11,7 @@ public static class DependencyInjection
     {
         var assembly = typeof(DependencyInjection).Assembly;
 
-        // 1. In-Memory Cache servisi
-        services.AddMemoryCache();
-
-        // 2. MediatR ve Pipeline Turnikeleri
+        // 1. MediatR ve Pipeline Turnikeleri
         services.AddMediatR(cfg =>
         {
             cfg.RegisterServicesFromAssembly(assembly);

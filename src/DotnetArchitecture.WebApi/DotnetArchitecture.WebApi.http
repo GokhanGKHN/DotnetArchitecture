@@ -1,126 +1,135 @@
 @Host = http://localhost:5294
 
 ### =========================================================================
-### 🔐 0. KİMLİK DOĞRULAMA (AUTH) İŞLEMLERİ
+### 🔐 1. KİMLİK DOĞRULAMA (AUTH)
 ### =========================================================================
 
-### 0.1 Admin Kullanıcı Kaydı (Register - Admin Rolü)
-# @name registerAdmin
+### 1.1 Admin Kullanıcı Kaydı
 POST {{Host}}/api/auth/register
 Content-Type: application/json
 
 {
-  "email": "admin@dotnetarchitecture.com",
+  "email": "admin@architecture.com",
   "password": "Password123*",
-  "firstName": "Gökhan",
-  "lastName": "Admin",
-  "role": 2
-}
-
-### 0.2 Normal Üye Kaydı (Register - Member Rolü)
-# @name registerMember
-POST {{Host}}/api/auth/register
-Content-Type: application/json
-
-{
-  "email": "user@dotnetarchitecture.com",
-  "password": "Password123*",
-  "firstName": "Ahmet",
-  "lastName": "Yılmaz",
+  "firstName": "Sistem",
+  "lastName": "Yöneticisi",
   "role": 1
 }
 
-### 0.3 Giriş Yap (Login)
+### 1.2 Üye (Member) Kullanıcı Kaydı
+POST {{Host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "member@architecture.com",
+  "password": "Password123*",
+  "firstName": "Standart",
+  "lastName": "Müşteri",
+  "role": 2
+}
+
+### 1.3 Admin Girişi (Token Al)
 # @name loginAdmin
 POST {{Host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@dotnetarchitecture.com",
+  "email": "admin@architecture.com",
   "password": "Password123*"
 }
 
+### Değişkene token ata (REST Client eklentisi için)
+@adminToken = {{loginAdmin.response.body.token}}
+
+### 1.4 Member Girişi (Token Al)
+# @name loginMember
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "member@architecture.com",
+  "password": "Password123*"
+}
+
+@memberToken = {{loginMember.response.body.token}}
+
+
 ### =========================================================================
-### 🛡️ 1. YETKİLENDİRME (AUTHORIZATION) TESTLERİ
+### 📦 2. ÜRÜN İŞLEMLERİ (PRODUCTS)
 ### =========================================================================
 
-### 1.1 Yetkisiz Ürün Ekleme Denemesi (Token Yok -> 401 Unauthorized Beklenir)
+### 2.1 Yeni Ürün Ekle (Yetkisiz Deneme - 401 Döner)
 POST {{Host}}/api/products
 Content-Type: application/json
 
 {
-  "name": "Yetkisiz Eklenen Ürün",
-  "price": 1000,
-  "initialStock": 5
+  "name": "Kablosuz Mouse",
+  "price": 450.00,
+  "initialStock": 100
 }
 
-### 1.2 Admin Token ile Başarılı Ürün Ekleme (200 OK)
-# DİKKAT: 0.3 Login adımından dönen token'ı kopyalayıp buraya yapıştırın:
-@AdminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiI1MzVlMjA4YS1jZDFiLTQ1OGQtYjBlOS1jYzExMWVjYjQzM2YiLCJlbWFpbCI6ImFkbWluQGRvdG5ldGFyY2hpdGVjdHVyZS5jb20iLCJ1bmlxdWVfbmFtZSI6IkfDtmtoYW4gQWRtaW4iLCJyb2xlIjoiQWRtaW4iLCJqdGkiOiI4ZDI2NzFlZC1lNDM0LTQ0ZDQtOGQ0MC1jNzYzYTc0YmRhNGQiLCJuYmYiOjE3ODkyOTY3NjcsImV4cCI6MTc4OTMwMDM2NywiaWF0IjoxNzg5Mjk2NzY3LCJpc3MiOiJEb3RuZXRBcmNoaXRlY3R1cmVBcGkiLCJhdWQiOiJEb3RuZXRBcmNoaXRlY3R1cmVDbGllbnQifQ.HDqiDxgdT7NTMD6fp2Jeb8rn5UYDD_oCunOhcyEHvgY
-
+### 2.2 Yeni Ürün Ekle (Member Token ile - 403 Forbidden Döner)
 POST {{Host}}/api/products
-Authorization: Bearer {{AdminToken}}
 Content-Type: application/json
+Authorization: Bearer {{memberToken}}
 
 {
-  "name": "Apple Mac Studio M2 Max",
-  "price": 85000,
-  "initialStock": 10
+  "name": "Kablosuz Mouse",
+  "price": 450.00,
+  "initialStock": 100
 }
 
+### 2.3 Yeni Ürün Ekle (Admin Token ile - 200 OK Döner ve Önbelleği Temizler)
+POST {{Host}}/api/products
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Ultra Geniş Monitör",
+  "price": 8500.00,
+  "initialStock": 25
+}
+
+### 2.4 Tüm Ürünleri Listele (Sayfalama, Filtreleme ve Dağıtık Önbellek)
+# İlk çağrıda Cache Miss olur, sonraki çağrılarda 1-2 ms içinde Redis'ten döner!
+GET {{Host}}/api/products?pageNumber=1&pageSize=10&sortBy=price&isDescending=true
+
+
 ### =========================================================================
-### 📦 2. ÜRÜNLER (Herkese Açık GET Sorguları)
+### 🛒 3. SİPARİŞ İŞLEMLERİ & OUTBOX PATTERN (ORDERS)
 ### =========================================================================
 
-### 2.1 Ürünleri Sayfala (GET Query - Sayfa 1, 2 Adet Ürün)
-GET {{Host}}/api/products?pageNumber=1&pageSize=2
-Accept: application/json
-
-### 2.2 Ürün Ara ve Sırala (Fiyata Göre Azalan)
-GET {{Host}}/api/products?searchTerm=Apple&sortBy=price&isDescending=true
-Accept: application/json
-
-### 2.3 Hatalı Sayfalama İsteği (Validation Testi - PageSize: 500)
-GET {{Host}}/api/products?pageNumber=1&pageSize=500
-Accept: application/json
-
-### =========================================================================
-### 🛒 3. SİPARİŞ İŞLEMLERİ (Giriş Yapmış Kullanıcılar)
-### =========================================================================
-
-### 3.1 Sipariş Oluştur (Giriş Yapmış Kullanıcı - POST Command)
+### 3.1 Sipariş Oluştur (Member Olarak)
+# Başarılı olursa Outbox tablosuna olay yazılır ve arka plan servisi işler
 POST {{Host}}/api/orders
-Authorization: Bearer {{AdminToken}}
 Content-Type: application/json
+Authorization: Bearer {{memberToken}}
 
 {
-  "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "customerId": "89605202-b062-4aa8-9f37-123456789abc",
   "items": [
     {
-      "productId": "2d88c9cc-d7a5-4f22-8768-44db5d89ebcd",
-      "quantity": 1
+      "productId": "7da084e7-4786-42d4-bb06-08de7226f30e",
+      "quantity": 2,
+      "unitPrice": 8500.00
     }
   ]
 }
 
-### 3.2 Sipariş Detayı Getir (GET Query)
-GET {{Host}}/api/orders/89605202-b2e0-4581-a6df-39321c7d528d
-Authorization: Bearer {{AdminToken}}
-Accept: application/json
 
 ### =========================================================================
 ### 🏥 4. SAĞLIK DENETİMLERİ (HEALTH CHECKS)
 ### =========================================================================
 
-### 4.1 Genel ve Ayrıntılı Sağlık Raporu (JSON)
+### 4.1 Kapsamlı JSON Sağlık Raporu (API, SQL Server & Redis)
 GET {{Host}}/health
-Accept: application/json
 
-### 4.2 Canlılık Probu (Liveness Probe - API Süreci)
+### 4.2 Canlılık Probu (Liveness Probe - Container Orkestrasyonu)
 GET {{Host}}/health/live
 
-### 4.3 Hazırlık Probu (Readiness Probe - SQL Server & Bağımlılıklar)
+### 4.3 Hazırlık Probu (Readiness Probe - SQL Server & Redis Bağımlılıkları)
 GET {{Host}}/health/ready
+
 
 ### =========================================================================
 ### 🛡️ 5. İSTEK SINIRLAMA (RATE LIMITING)
@@ -140,3 +149,12 @@ Content-Type: application/json
 }
 
 
+### =========================================================================
+### ⚡ 6. DAĞITIK ÖNBELLEK (REDIS DISTRIBUTED CACHING)
+### =========================================================================
+
+### 6.1 Önbellek Denemesi 1: Cache Miss (Veritabanından Çeker & Redis'e Yazar)
+GET {{Host}}/api/products?pageNumber=1&pageSize=10
+
+### 6.2 Önbellek Denemesi 2: Cache Hit (Doğrudan Redis'ten 1-2 ms içinde döner)
+GET {{Host}}/api/products?pageNumber=1&pageSize=10

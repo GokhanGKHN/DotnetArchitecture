@@ -19,6 +19,23 @@ services:
     networks:
       - dotnet_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: dotnet_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - dotnet_network
+
   webapi:
     container_name: dotnet_webapi
     restart: unless-stopped
@@ -29,6 +46,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: "Server=mssql;Database=DotnetArchitectureDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-YourPassword123.};TrustServerCertificate=True;"
+      ConnectionStrings__Redis: "redis:6379"
       Jwt__SecretKey: "SuperSecretKeyForDotnetArchitectureDemo2026!WithEnoughBits"
       Jwt__Issuer: "DotnetArchitectureApi"
       Jwt__Audience: "DotnetArchitectureClient"
@@ -37,11 +55,15 @@ services:
     depends_on:
       mssql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - dotnet_network
 
 volumes:
   mssql_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:

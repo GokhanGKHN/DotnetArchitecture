@@ -32,6 +32,23 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Services.PasswordHasher>();
         services.AddScoped<IJwtTokenGenerator, Services.JwtTokenGenerator>();
 
+        // 4. Dağıtık Önbellekleme Servisleri (Redis veya Fallback Memory)
+        var redisConnectionString = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnectionString;
+                options.InstanceName = "DotnetArch_";
+            });
+        }
+        else
+        {
+            services.AddDistributedMemoryCache();
+        }
+
+        services.AddSingleton<ICacheService, Services.DistributedCacheService>();
+
         return services;
     }
 }
