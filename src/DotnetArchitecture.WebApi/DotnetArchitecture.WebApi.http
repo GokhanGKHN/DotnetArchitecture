@@ -107,3 +107,18 @@ Content-Type: application/json
 GET {{Host}}/api/orders/89605202-b2e0-4581-a6df-39321c7d528d
 Authorization: Bearer {{AdminToken}}
 Accept: application/json
+
+### =========================================================================
+### 🏥 4. SAĞLIK DENETİMLERİ (HEALTH CHECKS)
+### =========================================================================
+
+### 4.1 Genel ve Ayrıntılı Sağlık Raporu (JSON)
+GET {{Host}}/health
+Accept: application/json
+
+### 4.2 Canlılık Probu (Liveness Probe - API Süreci)
+GET {{Host}}/health/live
+
+### 4.3 Hazırlık Probu (Readiness Probe - SQL Server & Bağımlılıklar)
+GET {{Host}}/health/ready
+

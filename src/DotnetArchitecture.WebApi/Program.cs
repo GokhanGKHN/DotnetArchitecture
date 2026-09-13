@@ -1,8 +1,11 @@
 using System.Text;
 using DotnetArchitecture.Application;
 using DotnetArchitecture.Persistence;
+using DotnetArchitecture.WebApi.Common;
 using DotnetArchitecture.WebApi.Middlewares;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -41,6 +44,14 @@ builder.Services.AddAuthentication(options =>
 });
 builder.Services.AddAuthorization();
 
+// 5. Health Checks (Sağlık Denetimleri) Kaydı
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy("API süreci aktif ve çalışıyor."), tags: ["live"])
+    .AddDbContextCheck<DotnetArchitecture.Persistence.Context.AppDbContext>(
+        name: "sqlserver",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready", "db"]);
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
@@ -60,6 +71,25 @@ app.UseHttpsRedirection();
 // Kimlik doğrulama turnikesi yetkilendirmeden ÖNCE çalışmalıdır!
 app.UseAuthentication();
 app.UseAuthorization();
+
+// 6. Health Checks Uç Noktaları
+// A. Kapsamlı JSON Sağlık Raporu (Tüm bileşenler)
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = HealthCheckResponseWriter.WriteDetailedResponse
+});
+
+// B. Canlılık Probu (Liveness Probe - Container orkestrasyonu için)
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+
+// C. Hazırlık Probu (Readiness Probe - Veritabanı ve bağımlılıklar için)
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.MapControllers();
 

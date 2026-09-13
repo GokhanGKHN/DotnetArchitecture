@@ -7,7 +7,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
-[![Tests](https://img.shields.io/badge/Tests-30%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Tests](https://img.shields.io/badge/Tests-33%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -22,6 +22,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [4. JWT Kimlik Doğrulama & Rol Yetkilendirme (RBAC)](#4-jwt-kimlik-doğrulama--rol-yetkilendirme-rbac)
   - [5. Standart Hata Yönetimi (RFC 7807 / 9110 ProblemDetails)](#5-standart-hata-yönetimi-rfc-7807--9110-problemdetails)
   - [6. Specification Pattern (ISpecification ve Evaluator)](#6-specification-pattern-ispecification-ve-evaluator)
+  - [7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)](#7-canlılık-ve-hazırlık-sağlık-denetimleri-health-checks)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -127,17 +128,23 @@ Repository arayüzlerini yüzlerce özel sorgu metoduyla (`GetByNameAndPriceAndC
 - **`SpecificationEvaluator<T>`:** EF Core sorgu ağacını (`IQueryable<T>`) arka planda dinamik olarak inşa eder; EF Core detaylarının Application veya Controller katmanına sızmasını (leak) engeller.
 - **Test Edilebilirlik:** Sorgu kuralları veritabanına gerek duymadan saf C# fonksiyonları gibi birim testlerine tabi tutulabilir.
 
+### 7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)
+Cloud-native, Kubernetes ve Docker orkestrasyon standartlarına tam uyumlu yerleşik sağlık kontrolü uç noktaları:
+- **`/health` (Kapsamlı JSON Sağlık Raporu):** API ve SQL Server bağlantı durumunu, her bir bileşenin milisaniye cinsinden gecikmesini ve hata detaylarını döndürür (`HealthCheckResponseWriter`).
+- **`/health/live` (Liveness Probe):** Yalnızca API sürecinin ayakta olup olmadığını denetler (Yanıt: `Healthy`). Süreç çökerse orkestratör konteyneri yeniden başlatır.
+- **`/health/ready` (Readiness Probe):** SQL Server veritabanına sorgu atabilirliğini denetler (`AddDbContextCheck<AppDbContext>`). Veritabanı yanıt vermiyorsa yük dengeleyici (Load Balancer) bu instance'a istek yönlendirmeyi geçici olarak durdurur.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **30 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **33 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
 ├── ⚡ DotnetArchitecture.Application.UnitTests (13 Test) -> CQRS Handler'ları, Specification kuralları, Validation turnikeleri
-└── 🌐 DotnetArchitecture.IntegrationTests     (7 Test)  -> WebApplicationFactory + İzole InMemory DB (Auth, RBAC 401/403/200)
+└── 🌐 DotnetArchitecture.IntegrationTests     (10 Test) -> WebApplicationFactory + İzole InMemory DB (Auth, RBAC, HealthChecks)
 ```
 
 Tüm testleri tek komutla koşturmak için:
@@ -147,11 +154,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (70 ms)
-Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (90 ms)
-Passed!  - Failed: 0, Passed:  7, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (1000 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (67 ms)
+Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (138 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (942 ms)
 
-Toplam 30 Testin 30'u da BAŞARILI! ✅
+Toplam 33 Testin 33'ü de BAŞARILI! ✅
 ```
 
 ---
@@ -186,6 +193,7 @@ DotnetArchitecture/
 │   │
 │   └── DotnetArchitecture.WebApi/           # API Sunum Katmanı
 │       ├── BackgroundServices/             # ProcessOutboxMessagesBackgroundService
+│       ├── Common/                         # HealthCheckResponseWriter (Standart JSON Raporu)
 │       ├── Controllers/                    # Auth, Products, Orders Controller'ları
 │       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails)
 │       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri
@@ -199,7 +207,7 @@ DotnetArchitecture/
 │   │   └── Specifications/                     # ProductsFilter ve OrderWithItems Testleri
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
-│       └── Controllers/                         # AuthController ve ProductsController Testleri
+│       └── Controllers/                         # Auth, Products ve HealthChecks Testleri
 │
 ├── .dockerignore                                # Docker derleme hariç tutma kuralları
 ├── .env.example                                 # Docker Compose ortam değişkenleri şablonu
@@ -291,3 +299,7 @@ Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/Dotne
    - `GET /api/products?pageSize=500` (Validation Turnikesi -> DB'ye gitmeden 400 Bad Request)
 4. **Outbox Pattern ile Sipariş:**
    - `POST /api/orders` (Sipariş anında onaylanır, arka plandaki worker 5 saniye içinde e-posta ve depo bildirimlerini dağıtır)
+5. **Sağlık Denetimleri (Health Checks):**
+   - `GET /health` (API ve SQL Server bileşenlerinin milisaniye gecikmeli ayrıntılı JSON durum raporu)
+   - `GET /health/live` (Konteyner Liveness probu -> `Healthy`)
+   - `GET /health/ready` (Konteyner Readiness probu -> `Healthy`)
