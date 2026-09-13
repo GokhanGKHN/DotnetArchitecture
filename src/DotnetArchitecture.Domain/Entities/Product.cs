@@ -5,7 +5,7 @@ namespace DotnetArchitecture.Domain.Entities;
 public class Product : BaseEntity
 {
     // Dışarıdan sadece okunabilir, kafasına göre kimse değiştiremez!                                                                                  
-    public string Name { get; private set; }
+    public string Name { get; private set; } = string.Empty;
     public decimal Price { get; private set; }
     public int StockQuantity { get; private set; }
 
