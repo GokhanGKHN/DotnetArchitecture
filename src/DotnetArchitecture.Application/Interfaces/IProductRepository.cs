@@ -1,3 +1,4 @@
+using DotnetArchitecture.Application.Common.Specifications;
 using DotnetArchitecture.Domain.Entities;
 
 namespace DotnetArchitecture.Application.Interfaces;
@@ -5,7 +6,10 @@ namespace DotnetArchitecture.Application.Interfaces;
 public interface IProductRepository
 {
     Task<Product?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Product?> GetBySpecAsync(ISpecification<Product> spec, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Product>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Product>> ListAsync(ISpecification<Product> spec, CancellationToken cancellationToken = default);
+    Task<int> CountAsync(ISpecification<Product> spec, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<Product> Items, int TotalCount)> GetPagedAsync(
         int pageNumber,
         int pageSize,

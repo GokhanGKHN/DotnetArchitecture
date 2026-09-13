@@ -7,7 +7,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
-[![Tests](https://img.shields.io/badge/Tests-25%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Tests](https://img.shields.io/badge/Tests-30%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -21,6 +21,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [3. Veritabanı Düzeyinde Sayfalama, Sıralama ve Filtreleme](#3-veritabanı-düzeyinde-sayfalama-sıralama-ve-filtreleme)
   - [4. JWT Kimlik Doğrulama & Rol Yetkilendirme (RBAC)](#4-jwt-kimlik-doğrulama--rol-yetkilendirme-rbac)
   - [5. Standart Hata Yönetimi (RFC 7807 / 9110 ProblemDetails)](#5-standart-hata-yönetimi-rfc-7807--9110-problemdetails)
+  - [6. Specification Pattern (ISpecification ve Evaluator)](#6-specification-pattern-ispecification-ve-evaluator)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -120,16 +121,22 @@ Veritabanına kayıt atarken aynı anda e-posta veya bildirim göndermenin yarat
 - `IExceptionHandler` arayüzü ile merkezi ve güvenli hata yakalama.
 - Validasyon hataları, iş kuralı ihlalleri (`InvalidOperationException`) ve bulunamadı durumları standart `application/problem+json` formatında döndürülür.
 
+### 6. Specification Pattern (ISpecification ve Evaluator)
+Repository arayüzlerini yüzlerce özel sorgu metoduyla (`GetByNameAndPriceAndCategory...`) kirletmek yerine, sorgu mantığını (Filtre, Eager Loading `Include`, Sıralama ve Sayfalama) kapsülleyen **Domain-Driven Design (DDD)** deseni:
+- **`ISpecification<T>` & `BaseSpecification<T>`:** Filtre (`Criteria`), sıralama (`OrderBy`, `OrderByDescending`), ilişkiler (`Includes`) ve sayfalama (`Skip`, `Take`) kurallarını güçlü tipli nesneler halinde tanımlar (örn: `ProductsFilterSpecification`, `OrderWithItemsSpecification`).
+- **`SpecificationEvaluator<T>`:** EF Core sorgu ağacını (`IQueryable<T>`) arka planda dinamik olarak inşa eder; EF Core detaylarının Application veya Controller katmanına sızmasını (leak) engeller.
+- **Test Edilebilirlik:** Sorgu kuralları veritabanına gerek duymadan saf C# fonksiyonları gibi birim testlerine tabi tutulabilir.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **25 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **30 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
-├── ⚡ DotnetArchitecture.Application.UnitTests (8 Test)  -> CQRS Handler'ları, FluentValidation, Turnike denetimleri
+├── ⚡ DotnetArchitecture.Application.UnitTests (13 Test) -> CQRS Handler'ları, Specification kuralları, Validation turnikeleri
 └── 🌐 DotnetArchitecture.IntegrationTests     (7 Test)  -> WebApplicationFactory + İzole InMemory DB (Auth, RBAC 401/403/200)
 ```
 
@@ -140,11 +147,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (63 ms)
-Passed!  - Failed: 0, Passed:  8, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (140 ms)
-Passed!  - Failed: 0, Passed:  7, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (937 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (70 ms)
+Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (90 ms)
+Passed!  - Failed: 0, Passed:  7, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (1000 ms)
 
-Toplam 25 Testin 25'i de BAŞARILI! ✅
+Toplam 30 Testin 30'u da BAŞARILI! ✅
 ```
 
 ---
@@ -161,12 +168,12 @@ DotnetArchitecture/
 │   │
 │   ├── DotnetArchitecture.Application/      # CQRS & İş Mantığı Katmanı
 │   │   ├── Behaviors/                      # Performance, Caching, Validation Turnikeleri
-│   │   ├── Common/                         # PagedResponse<T>
+│   │   ├── Common/                         # PagedResponse<T>, Specifications (ISpecification, BaseSpecification)
 │   │   ├── Features/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
-│   │   │   ├── Products/                   # CreateProduct, GetAllProducts (Paging & Cache)
-│   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events
-│   │   └── Interfaces/                     # IUnitOfWork, IProductRepository, IUserRepository vb.
+│   │   │   ├── Products/                   # CreateProduct, GetAllProducts, Specifications
+│   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events, Specifications
+│   │   └── Interfaces/                     # IUnitOfWork, IProductRepository, IOrderRepository vb.
 │   │
 │   ├── DotnetArchitecture.Persistence/      # Altyapı & Veritabanı Katmanı
 │   │   ├── Configurations/                 # Fluent API Entity Eşlemeleri (EF Core)
@@ -174,7 +181,8 @@ DotnetArchitecture/
 │   │   ├── Migrations/                     # EF Core Veritabanı Göçleri
 │   │   ├── Outbox/                         # OutboxMessage Entity
 │   │   ├── Repositories/                   # UnitOfWork, Repository Implementasyonları
-│   │   └── Services/                       # PBKDF2 PasswordHasher, JwtTokenGenerator
+│   │   ├── Services/                       # PBKDF2 PasswordHasher, JwtTokenGenerator
+│   │   └── Specifications/                 # SpecificationEvaluator (EF Core Queryable Oluşturucu)
 │   │
 │   └── DotnetArchitecture.WebApi/           # API Sunum Katmanı
 │       ├── BackgroundServices/             # ProcessOutboxMessagesBackgroundService
@@ -185,9 +193,10 @@ DotnetArchitecture/
 ├── tests/
 │   ├── DotnetArchitecture.Domain.UnitTests/      # Domain Birim Testleri
 │   │   └── Entities/                           # OrderTests, ProductTests, UserTests
-│   ├── DotnetArchitecture.Application.UnitTests/ # CQRS ve Turnike Birim Testleri
+│   ├── DotnetArchitecture.Application.UnitTests/ # CQRS, Turnike ve Specification Birim Testleri
 │   │   ├── Behaviors/                          # ValidationBehavior Mock Testleri
-│   │   └── Features/                           # Handler ve Validator Testleri
+│   │   ├── Features/                           # Handler ve Validator Testleri
+│   │   └── Specifications/                     # ProductsFilter ve OrderWithItems Testleri
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
 │       └── Controllers/                         # AuthController ve ProductsController Testleri
