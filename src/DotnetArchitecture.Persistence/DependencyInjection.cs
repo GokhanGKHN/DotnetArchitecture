@@ -11,9 +11,16 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddPersistenceServices(this IServiceCollection services, IConfiguration configuration)
     {
+        // 0. SaveChanges Interceptor (Audit & Soft Delete)
+        services.AddScoped<Interceptors.AuditableEntityInterceptor>();
+
         // 1. SQL Server bağlantısı
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        services.AddDbContext<AppDbContext>((sp, options) =>
+        {
+            var interceptor = sp.GetRequiredService<Interceptors.AuditableEntityInterceptor>();
+            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"))
+                   .AddInterceptors(interceptor);
+        });
 
         // 2. Repository ve Unit of Work kayıtları (Scoped: Her HTTP isteğinde tek bir örnek)
         services.AddScoped<IProductRepository, ProductRepository>();

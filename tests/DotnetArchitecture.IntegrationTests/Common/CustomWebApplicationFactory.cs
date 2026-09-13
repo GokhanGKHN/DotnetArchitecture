@@ -25,11 +25,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 .AddEntityFrameworkInMemoryDatabase()
                 .BuildServiceProvider();
 
-            // 3. Testler için izole InMemory AppDbContext bağla
-            services.AddDbContext<AppDbContext>(options =>
+            // 3. Testler için izole InMemory AppDbContext bağla (AuditableEntityInterceptor ile)
+            services.AddDbContext<AppDbContext>((sp, options) =>
             {
                 options.UseInMemoryDatabase(_dbName);
                 options.UseInternalServiceProvider(internalServiceProvider);
+                var interceptor = sp.GetService<DotnetArchitecture.Persistence.Interceptors.AuditableEntityInterceptor>();
+                if (interceptor != null)
+                {
+                    options.AddInterceptors(interceptor);
+                }
             });
         });
     }

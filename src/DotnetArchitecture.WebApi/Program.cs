@@ -15,6 +15,8 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Katman servisleri
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<DotnetArchitecture.Application.Interfaces.ICurrentUserService, DotnetArchitecture.WebApi.Services.CurrentUserService>();
 builder.Services.AddApplicationServices();
 builder.Services.AddPersistenceServices(builder.Configuration);
 

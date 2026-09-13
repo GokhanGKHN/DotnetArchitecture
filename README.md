@@ -7,7 +7,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Docker](https://img.shields.io/badge/Docker-MSSQL-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/_/microsoft-mssql-server)
-[![Tests](https://img.shields.io/badge/Tests-34%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
+[![Tests](https://img.shields.io/badge/Tests-37%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -24,6 +24,7 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [6. Specification Pattern (ISpecification ve Evaluator)](#6-specification-pattern-ispecification-ve-evaluator)
   - [7. Canlılık ve Hazırlık Sağlık Denetimleri (Health Checks)](#7-canlılık-ve-hazırlık-sağlık-denetimleri-health-checks)
   - [8. Dahili İstek Sınırlama (Rate Limiting - RFC 6585)](#8-dahili-istek-sınırlama-rate-limiting---rfc-6585)
+  - [9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)](#9-otomatik-denetim-izi-audit-logging-ve-mantıksal-silme-soft-delete)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -141,17 +142,23 @@ Cloud-native, Kubernetes ve Docker orkestrasyon standartlarına tam uyumlu yerle
 - **`GeneralPolicy` (Kaynak Koruma):** Genel API uç noktalarında (`Products`) IP başına 1 dakikada maksimum **100 istek**.
 - **Özelleştirilmiş 429 Yanıtı:** Limit aşıldığında istemciye standart `Retry-After: 60` HTTP başlığı ve RFC 7807/9110 `application/problem+json` formatında hata mesajı döndürülür.
 
+### 9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)
+EF Core `SaveChangesInterceptor` altyapısı sayesinde kod tekrarı olmaksızın merkezi veri güvenliği ve denetimi:
+- **`AuditableEntityInterceptor`:** Bir varlık eklendiğinde veya güncellendiğinde `CreatedAtUtc`, `CreatedBy`, `LastModifiedAtUtc`, `LastModifiedBy` alanları `ICurrentUserService` üzerinden (JWT taleplerinden) otomatik doldurulur. Geliştirici hiçbir Handler içinde tarih/kullanıcı atamakla uğraşmaz.
+- **Mantıksal Silme (Soft Delete):** `context.Remove(entity)` çağrıldığında fiziksel `DELETE` sorgusu engellenir; durum otomatik olarak `Modified` yapılarak `IsDeleted = true`, `DeletedAtUtc`, `DeletedBy` atanır.
+- **Global Query Filter:** `AppDbContext.OnModelCreating` aşamasında tanımlanan filtre ile sistem genelindeki tüm sorgularda (`Where`, `Specification`, `GetAll`) silinmiş kayıtlar SQL seviyesinde (`WHERE IsDeleted = 0`) otomatik filtrelenir; gerektiğinde `.IgnoreQueryFilters()` ile geçmiş kayıtlar denetlenebilir.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
 
-Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **34 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
+Projede katmanların bağımsızlığını ve güvenilirliğini garanti altına alan **37 adet otomatik test** bulunmaktadır (`xUnit`, `FluentAssertions`, `NSubstitute` ve `WebApplicationFactory`):
 
 ```text
 Test Projeleri Dağılımı:
 ├── 🧠 DotnetArchitecture.Domain.UnitTests      (10 Test) -> Varlık kuralları, stok düşme, Domain Events
 ├── ⚡ DotnetArchitecture.Application.UnitTests (13 Test) -> CQRS Handler'ları, Specification kuralları, Validation turnikeleri
-└── 🌐 DotnetArchitecture.IntegrationTests     (11 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting)
+└── 🌐 DotnetArchitecture.IntegrationTests     (14 Test) -> WebApplicationFactory + InMemory DB (Auth, RBAC, HealthChecks, RateLimiting, Interceptor)
 ```
 
 Tüm testleri tek komutla koşturmak için:
@@ -161,11 +168,11 @@ dotnet test
 
 Örnek Test Çıktısı:
 ```text
-Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (80 ms)
-Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (136 ms)
-Passed!  - Failed: 0, Passed: 11, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (980 ms)
+Passed!  - Failed: 0, Passed: 10, Skipped: 0 - DotnetArchitecture.Domain.UnitTests.dll (70 ms)
+Passed!  - Failed: 0, Passed: 13, Skipped: 0 - DotnetArchitecture.Application.UnitTests.dll (138 ms)
+Passed!  - Failed: 0, Passed: 14, Skipped: 0 - DotnetArchitecture.IntegrationTests.dll (983 ms)
 
-Toplam 34 Testin 34'ü de BAŞARILI! ✅
+Toplam 37 Testin 37'si de BAŞARILI! ✅
 ```
 
 ---
@@ -176,7 +183,7 @@ Toplam 34 Testin 34'ü de BAŞARILI! ✅
 DotnetArchitecture/
 ├── src/
 │   ├── DotnetArchitecture.Domain/           # Çekirdek Domain Katmanı
-│   │   ├── Common/                         # BaseEntity, IDomainEvent
+│   │   ├── Common/                         # BaseEntity, IAuditableEntity, ISoftDeletable, IDomainEvent
 │   │   ├── Entities/                       # User, Product, Order, OrderItem
 │   │   └── Enums/                          # UserRole, OrderStatus
 │   │
@@ -187,11 +194,12 @@ DotnetArchitecture/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
 │   │   │   ├── Products/                   # CreateProduct, GetAllProducts, Specifications
 │   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events, Specifications
-│   │   └── Interfaces/                     # IUnitOfWork, IProductRepository, IOrderRepository vb.
+│   │   └── Interfaces/                     # IUnitOfWork, ICurrentUserService, IProductRepository vb.
 │   │
 │   ├── DotnetArchitecture.Persistence/      # Altyapı & Veritabanı Katmanı
 │   │   ├── Configurations/                 # Fluent API Entity Eşlemeleri (EF Core)
-│   │   ├── Context/                        # AppDbContext
+│   │   ├── Context/                        # AppDbContext (Global Query Filters)
+│   │   ├── Interceptors/                   # AuditableEntityInterceptor (Audit & Soft Delete)
 │   │   ├── Migrations/                     # EF Core Veritabanı Göçleri
 │   │   ├── Outbox/                         # OutboxMessage Entity
 │   │   ├── Repositories/                   # UnitOfWork, Repository Implementasyonları
@@ -203,6 +211,7 @@ DotnetArchitecture/
 │       ├── Common/                         # HealthCheckResponseWriter (Standart JSON Raporu)
 │       ├── Controllers/                    # Auth, Products, Orders Controller'ları
 │       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails)
+│       ├── Services/                       # CurrentUserService (IHttpContextAccessor ile Claims Erişimi)
 │       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri
 │
 ├── tests/
@@ -215,6 +224,7 @@ DotnetArchitecture/
 │   └── DotnetArchitecture.IntegrationTests/     # Gerçek HTTP API Entegrasyon Testleri
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
 │       ├── Controllers/                         # Auth, Products ve HealthChecks Testleri
+│       ├── Interceptors/                        # AuditableEntityInterceptorTests (Audit & Soft Delete)
 │       └── Middlewares/                         # RateLimitingTests (429 Too Many Requests)
 │
 ├── .dockerignore                                # Docker derleme hariç tutma kuralları
