@@ -13,10 +13,16 @@ public static class DependencyInjection
 
         // 1. MediatR ve ValidationBehavior kaydı                                                                                                                           
         services.AddMediatR(cfg =>
-        {
-            cfg.RegisterServicesFromAssembly(assembly);
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>)); // ✨ Turnikeyi MediatR'a bağlıyoruz                                                                        
-        });
+            {
+                cfg.RegisterServicesFromAssembly(assembly);
+
+                // 1. Önce kronometre başlasın (En dış halka)
+                cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
+
+                // 2. Sonra validasyon turnikesi çalışsın (İç halka)
+                cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+            });
+
 
         // 2. Bu katmandaki tüm FluentValidation Validator sınıflarını otomatik bul ve kaydet                                                                               
         services.AddValidatorsFromAssembly(assembly);
