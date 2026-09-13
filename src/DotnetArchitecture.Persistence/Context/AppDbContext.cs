@@ -1,4 +1,5 @@
 using DotnetArchitecture.Domain.Entities;
+using DotnetArchitecture.Persistence.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotnetArchitecture.Persistence.Context;
@@ -12,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

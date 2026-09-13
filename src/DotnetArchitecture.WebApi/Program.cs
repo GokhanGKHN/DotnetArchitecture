@@ -13,6 +13,9 @@ builder.Services.AddPersistenceServices(builder.Configuration);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
+// 3. Arka Plan Servisleri (Hosted Services / Workers)
+builder.Services.AddHostedService<DotnetArchitecture.WebApi.BackgroundServices.ProcessOutboxMessagesBackgroundService>();
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
