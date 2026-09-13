@@ -1,6 +1,7 @@
 using DotnetArchitecture.Application.Features.Products.Commands.CreateProduct;
 using DotnetArchitecture.Application.Features.Products.Queries.GetAllProducts;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotnetArchitecture.WebApi.Controllers;
@@ -16,8 +17,9 @@ public class ProductsController : ControllerBase
         _mediator = mediator;
     }
 
-    // POST api/products
+    // POST api/products (Sadece Admin rolündeki kullanıcılar ürün ekleyebilir)
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create([FromBody] CreateProductCommand command, CancellationToken cancellationToken)
     {
         var productId = await _mediator.Send(command, cancellationToken);

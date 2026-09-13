@@ -1,39 +1,96 @@
 @Host = http://localhost:5294
 
-### 1. Hatalı Ürün Ekle (Validation Testi - POST Command)
+### =========================================================================
+### 🔐 0. KİMLİK DOĞRULAMA (AUTH) İŞLEMLERİ
+### =========================================================================
+
+### 0.1 Admin Kullanıcı Kaydı (Register - Admin Rolü)
+# @name registerAdmin
+POST {{Host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@dotnetarchitecture.com",
+  "password": "Password123*",
+  "firstName": "Gökhan",
+  "lastName": "Admin",
+  "role": 2
+}
+
+### 0.2 Normal Üye Kaydı (Register - Member Rolü)
+# @name registerMember
+POST {{Host}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@dotnetarchitecture.com",
+  "password": "Password123*",
+  "firstName": "Ahmet",
+  "lastName": "Yılmaz",
+  "role": 1
+}
+
+### 0.3 Giriş Yap (Login)
+# @name loginAdmin
+POST {{Host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@dotnetarchitecture.com",
+  "password": "Password123*"
+}
+
+### =========================================================================
+### 🛡️ 1. YETKİLENDİRME (AUTHORIZATION) TESTLERİ
+### =========================================================================
+
+### 1.1 Yetkisiz Ürün Ekleme Denemesi (Token Yok -> 401 Unauthorized Beklenir)
 POST {{Host}}/api/products
 Content-Type: application/json
 
 {
-  "name": "",
-  "price": -50,
-  "initialStock": -5
+  "name": "Yetkisiz Eklenen Ürün",
+  "price": 1000,
+  "initialStock": 5
 }
 
-### 1.1 Geçerli Ürün Ekle (POST Command - Önbelleği Temizler)
+### 1.2 Admin Token ile Başarılı Ürün Ekleme (200 OK)
+# DİKKAT: 0.3 Login adımından dönen token'ı kopyalayıp buraya yapıştırın:
+@AdminToken = BURAYA_LOGIN_ADIMINDAN_DONEN_TOKENI_YAPISTIRIN
+
 POST {{Host}}/api/products
+Authorization: Bearer {{AdminToken}}
 Content-Type: application/json
 
 {
-  "name": "Apple Magic Keyboard",
-  "price": 4200,
-  "initialStock": 15
+  "name": "Apple Mac Studio M2 Max",
+  "price": 85000,
+  "initialStock": 10
 }
 
-### 2. Ürünleri Sayfala (GET Query - Sayfa 1, 2 Adet Ürün)
+### =========================================================================
+### 📦 2. ÜRÜNLER (Herkese Açık GET Sorguları)
+### =========================================================================
+
+### 2.1 Ürünleri Sayfala (GET Query - Sayfa 1, 2 Adet Ürün)
 GET {{Host}}/api/products?pageNumber=1&pageSize=2
 Accept: application/json
 
-### 2.1 Ürün Ara ve Sırala (Fiyata Göre Azalan - GET Query)
-GET {{Host}}/api/products?searchTerm=Logitech&sortBy=price&isDescending=true
+### 2.2 Ürün Ara ve Sırala (Fiyata Göre Azalan)
+GET {{Host}}/api/products?searchTerm=Apple&sortBy=price&isDescending=true
 Accept: application/json
 
-### 2.2 Hatalı Sayfalama İsteği (Validation Testi - PageSize: 500)
+### 2.3 Hatalı Sayfalama İsteği (Validation Testi - PageSize: 500)
 GET {{Host}}/api/products?pageNumber=1&pageSize=500
 Accept: application/json
 
-### 3. Sipariş Oluştur (POST Command)
+### =========================================================================
+### 🛒 3. SİPARİŞ İŞLEMLERİ (Giriş Yapmış Kullanıcılar)
+### =========================================================================
+
+### 3.1 Sipariş Oluştur (Giriş Yapmış Kullanıcı - POST Command)
 POST {{Host}}/api/orders
+Authorization: Bearer {{AdminToken}}
 Content-Type: application/json
 
 {
@@ -46,6 +103,7 @@ Content-Type: application/json
   ]
 }
 
-### 4. Sipariş Detayı Getir (GET Query)
+### 3.2 Sipariş Detayı Getir (GET Query)
 GET {{Host}}/api/orders/89605202-b2e0-4581-a6df-39321c7d528d
+Authorization: Bearer {{AdminToken}}
 Accept: application/json

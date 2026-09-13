@@ -18,7 +18,12 @@ public static class DependencyInjection
         // 2. Repository ve Unit of Work kayıtları (Scoped: Her HTTP isteğinde tek bir örnek)
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // 3. Kimlik Doğrulama Servisleri (Password Hasher & JWT Generator)
+        services.AddSingleton<IPasswordHasher, Services.PasswordHasher>();
+        services.AddScoped<IJwtTokenGenerator, Services.JwtTokenGenerator>();
 
         return services;
     }

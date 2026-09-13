@@ -1,12 +1,14 @@
 using DotnetArchitecture.Application.Features.Orders.Commands.CreateOrder;
-using DotnetArchitecture.Application.Features.Orders.Queries.GetOrderById; // 👈 Bu using'i ekle                                                                            
+using DotnetArchitecture.Application.Features.Orders.Queries.GetOrderById;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotnetArchitecture.WebApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize] // Sadece giriş yapmış kullanıcılar sipariş oluşturabilir veya detay görebilir
 public class OrdersController : ControllerBase
 {
     private readonly ISender _mediator;
