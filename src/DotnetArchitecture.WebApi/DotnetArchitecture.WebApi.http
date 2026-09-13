@@ -1,6 +1,6 @@
 @Host = http://localhost:5294
 
-### 1. Yeni Ürün Ekle (POST Command)
+### 1. Hatalı Ürün Ekle (Validation Testi - POST Command)
 POST {{Host}}/api/products
 Content-Type: application/json
 
@@ -8,6 +8,16 @@ Content-Type: application/json
   "name": "",
   "price": -50,
   "initialStock": -5
+}
+
+### 1.1 Geçerli Ürün Ekle (POST Command - Önbelleği Temizler)
+POST {{Host}}/api/products
+Content-Type: application/json
+
+{
+  "name": "Apple Magic Keyboard",
+  "price": 4200,
+  "initialStock": 15
 }
 
 ### 2. Tüm Ürünleri Getir (GET Query)

@@ -11,17 +11,23 @@ public static class DependencyInjection
     {
         var assembly = typeof(DependencyInjection).Assembly;
 
-        // 1. MediatR ve ValidationBehavior kaydı                                                                                                                           
+        // 1. In-Memory Cache servisi
+        services.AddMemoryCache();
+
+        // 2. MediatR ve Pipeline Turnikeleri
         services.AddMediatR(cfg =>
-            {
-                cfg.RegisterServicesFromAssembly(assembly);
+        {
+            cfg.RegisterServicesFromAssembly(assembly);
 
-                // 1. Önce kronometre başlasın (En dış halka)
-                cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
+            // Turnike 1: Kronometre başlasın (En dış halka - tüm süreyi ölçer)
+            cfg.AddOpenBehavior(typeof(PerformanceBehavior<,>));
 
-                // 2. Sonra validasyon turnikesi çalışsın (İç halka)
-                cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
-            });
+            // Turnike 2: Önbellek kontrolü (Cache varsa anında döner, DB ve validasyona gitmez)
+            cfg.AddOpenBehavior(typeof(CachingBehavior<,>));
+
+            // Turnike 3: Validasyon denetimi (Sadece cache miss olduğunda veya komutlarda çalışır)
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
 
 
         // 2. Bu katmandaki tüm FluentValidation Validator sınıflarını otomatik bul ve kaydet                                                                               
