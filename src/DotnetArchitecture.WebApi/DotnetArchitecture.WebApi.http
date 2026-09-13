@@ -56,7 +56,7 @@ Content-Type: application/json
 
 ### 1.2 Admin Token ile Başarılı Ürün Ekleme (200 OK)
 # DİKKAT: 0.3 Login adımından dönen token'ı kopyalayıp buraya yapıştırın:
-@AdminToken = BURAYA_LOGIN_ADIMINDAN_DONEN_TOKENI_YAPISTIRIN
+@AdminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiI1MzVlMjA4YS1jZDFiLTQ1OGQtYjBlOS1jYzExMWVjYjQzM2YiLCJlbWFpbCI6ImFkbWluQGRvdG5ldGFyY2hpdGVjdHVyZS5jb20iLCJ1bmlxdWVfbmFtZSI6IkfDtmtoYW4gQWRtaW4iLCJyb2xlIjoiQWRtaW4iLCJqdGkiOiI4ZDI2NzFlZC1lNDM0LTQ0ZDQtOGQ0MC1jNzYzYTc0YmRhNGQiLCJuYmYiOjE3ODkyOTY3NjcsImV4cCI6MTc4OTMwMDM2NywiaWF0IjoxNzg5Mjk2NzY3LCJpc3MiOiJEb3RuZXRBcmNoaXRlY3R1cmVBcGkiLCJhdWQiOiJEb3RuZXRBcmNoaXRlY3R1cmVDbGllbnQifQ.HDqiDxgdT7NTMD6fp2Jeb8rn5UYDD_oCunOhcyEHvgY
 
 POST {{Host}}/api/products
 Authorization: Bearer {{AdminToken}}
