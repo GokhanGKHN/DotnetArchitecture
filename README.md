@@ -192,6 +192,9 @@ DotnetArchitecture/
 │       ├── Common/CustomWebApplicationFactory   # İzole Test Veritabanı Yapılandırması
 │       └── Controllers/                         # AuthController ve ProductsController Testleri
 │
+├── .dockerignore                                # Docker derleme hariç tutma kuralları
+├── .env.example                                 # Docker Compose ortam değişkenleri şablonu
+├── docker-compose.yml                           # MSSQL + WebApi çoklu konteyner orkestrasyonu
 └── README.md
 ```
 
@@ -199,29 +202,61 @@ DotnetArchitecture/
 
 ## 🚀 Kurulum ve Çalıştırma
 
-### Gereksinimler
+Projeyi çalıştırmak için iki pratik yöntem bulunmaktadır:
+
+### 🌟 Seçenek A: Docker Compose ile Tek Komutta Çalıştırma (Önerilen)
+
+Sisteminizde yalnızca Docker yüklü olması yeterlidir. SQL Server ve WebApi birbirine bağlı olarak otomatik ayağa kalkar:
+
+```bash
+# 1. Depoyu klonlayıp dizine geçin
+git clone https://github.com/GokhanGKHN/DotnetArchitecture.git
+cd DotnetArchitecture
+
+# 2. MSSQL ve WebApi'yi arka planda başlatın
+docker compose up -d
+```
+
+> [!TIP]
+> **Otomatik Sağlık Denetimi & Migration:** WebApi servisi, SQL Server'ın ayağa kalkıp sorgu kabul etmesini (`healthcheck: service_healthy`) bekler. Başlatıldığında veritabanı tablolarını (`AppDbContext.Database.MigrateAsync`) otomatik oluşturur!
+
+API arayüzüne anında erişin:
+👉 `http://localhost:5294/scalar/v1`
+
+Konteynerleri durdurmak için:
+```bash
+docker compose down
+```
+
+---
+
+### 💻 Seçenek B: Yerel Geliştirme (Local CLI) ile Çalıştırma
+
+Eğer yerel makinenizde geliştirme yapmak isterseniz:
+
+#### Gereksinimler
 - [.NET 10 SDK](https://dotnet.microsoft.com/)
 - [Docker Desktop](https://www.docker.com/) veya yüklü bir Docker motoru
 - `dotnet-ef` CLI aracı (`dotnet tool install --global dotnet-ef`)
 
-### 1. SQL Server Docker Konteynerini Başlatın
+#### 1. Yalnızca SQL Server Konteynerini Başlatın
 ```bash
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourPassword123." \
    -p 1433:1433 --name mssql_express -d \
    mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-### 2. Güvenli Bağlantı Dizesini (User Secrets) Tanımlayın
+#### 2. Güvenli Bağlantı Dizesini (User Secrets) Tanımlayın
 ```bash
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=DotnetArchitectureDb;User Id=sa;Password=YourPassword123.;TrustServerCertificate=True;" --project src/DotnetArchitecture.WebApi
 ```
 
-### 3. Veritabanı Tablolarını Oluşturun (Migration)
+#### 3. Veritabanı Tablolarını Oluşturun (Migration)
 ```bash
 dotnet ef database update --project src/DotnetArchitecture.Persistence --startup-project src/DotnetArchitecture.WebApi
 ```
 
-### 4. Uygulamayı Ayağa Kaldırın
+#### 4. Uygulamayı Ayağa Kaldırın
 ```bash
 dotnet run --project src/DotnetArchitecture.WebApi
 ```

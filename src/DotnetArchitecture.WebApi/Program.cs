@@ -63,6 +63,16 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Sadece gerçek SQL Server bağlantısı varsa bekleyen migration'ları otomatik uygula (Testlerde InMemory kullanılır)
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<DotnetArchitecture.Persistence.Context.AppDbContext>();
+    if (Microsoft.EntityFrameworkCore.SqlServerDatabaseFacadeExtensions.IsSqlServer(dbContext.Database))
+    {
+        await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(dbContext.Database);
+    }
+}
+
 app.Run();
 
 public partial class Program { }
