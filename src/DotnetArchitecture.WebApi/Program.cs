@@ -145,48 +145,53 @@ if (!string.IsNullOrWhiteSpace(redisConnectionString))
 }
 // 7. Harici Ödeme Servisi & Polly Dayanıklılık Boru Hattı (Resilience Pipeline)                                                                                                       
 builder.Services.AddTransient<PaymentApiSimulationHandler>();
-builder.Services.AddHttpClient<IPaymentGateway, PaymentGatewayClient>(client =>
+var paymentClientBuilder = builder.Services.AddHttpClient<IPaymentGateway, PaymentGatewayClient>(client =>
 {
- client.BaseAddress = new Uri("https://api.external-payment-gateway.com/");
-})
-.AddHttpMessageHandler<PaymentApiSimulationHandler>()
-.AddStandardResilienceHandler(options =>
-{
-    // A. Akıllı Yeniden Deneme (Retry): Geçici 5xx ve 408 hatalarında 3 kez üstel artış (Exponential Backoff + Jitter) ile tekrar dene                                                
- options.Retry.MaxRetryAttempts = 3;
- options.Retry.Delay = TimeSpan.FromMilliseconds(200);
- options.Retry.BackoffType = Polly.DelayBackoffType.Exponential;
- options.Retry.UseJitter = true;
- options.Retry.OnRetry = args =>
- {
-     Console.WriteLine($"⚠️ [POLLY RETRY] İstek başarısız oldu ({args.Outcome.Result?.StatusCode}). {args.AttemptNumber}. deneme yapılıyor...");
-     return ValueTask.CompletedTask;
- };
-
-    // B. Devre Kesici (Circuit Breaker): 10 saniyede %50'den fazla hata olursa devreyi 15 saniyeliğine AÇ (OPEN)!                                                                     
- options.CircuitBreaker.FailureRatio = 0.5;
- options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
- options.CircuitBreaker.MinimumThroughput = 4;
- options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
- options.CircuitBreaker.OnOpened = args =>
- {
-     Console.WriteLine($"⚡ [CIRCUIT BREAKER] Sigorta attı! Devre AÇILDI (OPEN). Hata oranı aşıldı, dış servise istekler {args.BreakDuration.TotalSeconds} saniye kesildi.");
-     return ValueTask.CompletedTask;
- };
- options.CircuitBreaker.OnClosed = args =>
- {
-     Console.WriteLine("✅ [CIRCUIT BREAKER] Sigorta kapandı! Devre KAPALI (CLOSED). Dış servis toparlandı, istekler normale döndü.");
-     return ValueTask.CompletedTask;
- };
- options.CircuitBreaker.OnHalfOpened = args =>
- {
-     Console.WriteLine("🔄 [CIRCUIT BREAKER] Devre YARI AÇIK (HALF-OPEN). Dış servisin düzelip düzelmediği test ediliyor...");
-     return ValueTask.CompletedTask;
- };
-
-    // C. İstek Başına Zaman Aşımı (Attempt Timeout): Dış servis 2 saniye içinde yanıt vermezse zaman aşımına uğrat                                                                    
- options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(2);
+    client.BaseAddress = new Uri("https://api.external-payment-gateway.com/");
 });
+
+// A) Polly Resilience Handler'ı EN DIŞA koyuyoruz (Böylece gelen ve giden tüm trafiği denetler)                                                                                       
+paymentClientBuilder.AddStandardResilienceHandler(options =>
+{
+    // 1. Akıllı Yeniden Deneme (Retry): 5xx ve 408 hatalarında 3 kez üstel artış (Exponential Backoff + Jitter) ile tekrar dene                                                       
+    options.Retry.MaxRetryAttempts = 3;
+    options.Retry.Delay = TimeSpan.FromMilliseconds(200);
+    options.Retry.BackoffType = Polly.DelayBackoffType.Exponential;
+    options.Retry.UseJitter = true;
+    options.Retry.OnRetry = args =>
+    {
+        Console.WriteLine($"⚠️ [POLLY RETRY] İstek başarısız oldu ({args.Outcome.Result?.StatusCode}). {args.AttemptNumber}. deneme yapılıyor...");
+        return ValueTask.CompletedTask;
+    };
+
+    // 2. Devre Kesici (Circuit Breaker): 10 saniyede %50'den fazla hata olursa devreyi 15 saniyeliğine AÇ (OPEN)!
+    options.CircuitBreaker.FailureRatio = 0.5;
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(10);
+    options.CircuitBreaker.MinimumThroughput = 4;
+    options.CircuitBreaker.BreakDuration = TimeSpan.FromSeconds(15);
+    options.CircuitBreaker.OnOpened = args =>
+    {
+        Console.WriteLine($"⚡ [CIRCUIT BREAKER] Sigorta attı! Devre AÇILDI (OPEN). Hata oranı aşıldı, dış servise istekler {args.BreakDuration.TotalSeconds} saniye kesildi.");
+        return ValueTask.CompletedTask;
+    };
+    options.CircuitBreaker.OnClosed = args =>
+    {
+        Console.WriteLine("✅ [CIRCUIT BREAKER] Sigorta kapandı! Devre KAPALI (CLOSED). Dış servis toparlandı, istekler normale döndü.");
+        return ValueTask.CompletedTask;
+    };
+    options.CircuitBreaker.OnHalfOpened = args =>
+    {
+        Console.WriteLine("🔄 [CIRCUIT BREAKER] Devre YARI AÇIK (HALF-OPEN). Dış servisin düzelip düzelmediği test ediliyor...");
+        return ValueTask.CompletedTask;
+    };
+
+    // 3. İstek Başına Zaman Aşımı (Attempt Timeout): Dış servis 2 saniye içinde yanıt vermezse zaman aşımına uğrat
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(2);
+});
+
+// B) Simülasyon Handler'ı Polly'nin İÇİNE koyuyoruz (Polly onun döndürdüğü hataları anında yakalayacak!)
+paymentClientBuilder.AddHttpMessageHandler<PaymentApiSimulationHandler>();
+
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
