@@ -7,7 +7,10 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
 [![EF Core](https://img.shields.io/badge/EF%20Core-10.0-512BD4?logo=nuget&logoColor=white)](https://docs.microsoft.com/ef/core/)
 [![MediatR](https://img.shields.io/badge/MediatR-CQRS-blue)](https://github.com/jbogard/MediatR)
 [![Redis](https://img.shields.io/badge/Redis-7--Alpine-DC382D?logo=redis&logoColor=white)](https://redis.io/)
-[![Docker](https://img.shields.io/badge/Docker-MSSQL%20%26%20Redis-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/)
+[![Docker](https://img.shields.io/badge/Docker-MSSQL%2C%20Redis%20%26%20RabbitMQ-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/)
+[![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3.13-FF6600?logo=rabbitmq&logoColor=white)](https://www.rabbitmq.com/)
+[![MassTransit](https://img.shields.io/badge/MassTransit-v8-blue)](https://masstransit.io/)
+[![Polly](https://img.shields.io/badge/Polly-v8%20Resilience-orange)](https://github.com/App-vNext/Polly)
 [![Tests](https://img.shields.io/badge/Tests-58%20Passed-brightgreen?logo=xunit&logoColor=white)](https://github.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -29,6 +32,8 @@ Kurumsal standartlarda geliştirilmiş, **Clean Architecture**, **Domain-Driven 
   - [9. Otomatik Denetim İzi (Audit Logging) ve Mantıksal Silme (Soft Delete)](#9-otomatik-denetim-izi-audit-logging-ve-mantıksal-silme-soft-delete)
   - [10. Dağıtık Önbellekleme (Distributed Caching with Redis & IDistributedCache)](#10-dağıtık-önbellekleme-distributed-caching-with-redis--idistributedcache)
   - [11. Idempotency Turnikesi (Idempotent Consumer Pattern)](#11-idempotency-turnikesi-idempotent-consumer-pattern)
+  - [12. Asenkron Mesajlaşma Kuyruğu (RabbitMQ & MassTransit)](#12-asenkron-mesajlaşma-kuyruğu-rabbitmq--masstransit)
+  - [13. Modern Dayanıklılık & Hata Toleransı (.NET Resilience / Polly v8)](#13-modern-dayanıklılık--hata-toleransı-net-resilience--polly-v8)
 - [🧪 Otomatik Test Mimarisi (Unit & Integration Tests)](#-otomatik-test-mimarisi-unit--integration-tests)
 - [Proje Dizin Yapısı](#-proje-dizin-yapısı)
 - [Kurulum ve Çalıştırma](#-kurulum-ve-çalıştırma)
@@ -45,15 +50,17 @@ flowchart TD
     subgraph WebApi ["🌐 WebApi Katmanı"]
         Controllers["İnce Controller'lar"]
         Middlewares["Global Exception Handler & Rate Limiter"]
-        HealthChecks["Liveness & Readiness Probes (SQL + Redis)"]
+        HealthChecks["Liveness & Readiness Probes (SQL, Redis, RabbitMQ)"]
         BackgroundWorker["Outbox Background Worker"]
+        PollyPipeline["Polly Resilience Pipeline (Retry, Circuit Breaker, Timeout)"]
     end
 
     subgraph Application ["⚡ Application Katmanı (CQRS)"]
         Commands["Commands & Queries (MediatR)"]
         Behaviors["Pipeline Turnikeleri (Performance, Idempotency, Caching, Validation)"]
-        Events["Domain Event Handlers"]
-        AppInterfaces["Interfaces (IUnitOfWork, ICacheService, IIdempotencyService, Repositories)"]
+        Events["Domain & Integration Event Handlers"]
+        Consumers["MassTransit Consumer (OrderCreatedEventConsumer)"]
+        AppInterfaces["Interfaces (IPaymentGateway, IUnitOfWork, ICacheService, Repositories)"]
     end
 
     subgraph Persistence ["🗄️ Persistence Katmanı"]
@@ -72,11 +79,20 @@ flowchart TD
         Enums["Enums (UserRole, OrderStatus)"]
     end
 
+    subgraph ExternalServices ["☁️ Dış Servisler & Mesajlaşma"]
+        RabbitMQBroker["RabbitMQ Message Broker"]
+        ExternalPaymentApi["Harici Banka / Ödeme API'si"]
+    end
+
     WebApi --> Application
     WebApi --> Persistence
     Persistence --> Application
     Application --> Domain
     Persistence --> Domain
+
+    BackgroundWorker -.->|MassTransit Publish| RabbitMQBroker
+    RabbitMQBroker -.->|Consume| Consumers
+    PollyPipeline -->|Korumalı HTTP Çağrısı| ExternalPaymentApi
 ```
 
 ---
@@ -191,6 +207,23 @@ Mikroservis ve çoklu konteyner (Multi-replica) ortamlarında sunucuların belle
   - **Eşzamanlı Çağrı (`InProgress` / Çakışma):** İlk istek henüz bitmemişken aynı anahtarla paralel ikinci bir istek gelirse `IdempotencyConflictException` fırlatılır ve istemciye `409 Conflict` dönülür.
   - **Hata Güvenliği (Rollback):** Eğer işlem bir validasyon veya veritabanı hatasıyla sonlanırsa kilit derhal serbest bırakılır (`ReleaseAsync`), böylece istemci düzeltme yapıp aynı anahtarla tekrar deneyebilir.
 
+### 12. Asenkron Mesajlaşma Kuyruğu (RabbitMQ & MassTransit)
+
+Outbox Pattern ile veritabanına kaydedilen domain olayları, mikroservisler arası asenkron iletişim ve arka plan görevleri için mesaj broker'ına aktarılır:
+
+- **Loose Coupling (Gevşek Bağlılık):** `PublishIntegrationEventOnOrderCreatedHandler`, `OrderCreatedDomainEvent`'i `OrderCreatedIntegrationEvent`'e dönüştürerek `IPublishEndpoint` ile RabbitMQ Exchange'ine basar.
+- **MassTransit & RabbitMQ:** `OrderCreatedEventConsumer` kuyruğu asenkron olarak dinler. Fatura kesme, kargo entegrasyonu ve dış bildirimler ana API thread'ini bloklamadan kuyruk üzerinden tüketilir (`Consume`).
+- **Görsel Yönetim Paneli:** Docker üzerinde koşan RabbitMQ Management Dashboard (`http://localhost:15672`) üzerinden anlık mesaj trafiği, kuyruk derinlikleri ve tüketici (consumer) kapasitesi izlenebilir.
+
+### 13. Modern Dayanıklılık & Hata Toleransı (.NET Resilience / Polly v8)
+
+Dış servis ve üçüncü parti banka/ödeme altyapısı (Stripe, İyzico vb.) bağımlılıklarında meydana gelen kesintilere karşı `Microsoft.Extensions.Http.Resilience` ile kurumsal koruma kalkanı:
+
+- **Akıllı Yeniden Deneme (Retry):** Geçici 5xx ve 408 hatalarında **Exponential Backoff & Jitter** ile 3 kez otomatik tekrar dener. Sunucu üzerindeki yükü yayarak "Thundering Herd" problemini önler.
+- **Devre Kesici (Circuit Breaker):** Dış serviste 10 saniyelik pencerede %50'den fazla hata oluşursa sigortayı attırır (**Circuit OPEN**). Sonraki istekler dış servise gitmeden 0 ms içinde doğrudan reddedilir (`BrokenCircuitException`). 15 saniye sonra sistem **HALF-OPEN** durumuna geçip tek bir deneme isteğiyle servisi test eder; düzelmişse devreyi kapatır (**CLOSED**).
+- **Zaman Aşımı (Timeout):** Yanıt vermeyen veya kilitlenen dış servislere karşı istek başına 2 saniye zaman aşımı limiti uygular (`AttemptTimeout`).
+- **Simülasyon Mekanizması:** `PaymentApiSimulationHandler` sayesinde canlı ortamda `.http` dosyası üzerinden `Normal`, `Flaky` (geçici hata), `Outage` (tam çökme) ve `Slow` (yavaş yanıt) senaryoları simüle edilip test edilebilir.
+
 ---
 
 ## 🧪 Otomatik Test Mimarisi (Unit & Integration Tests)
@@ -239,11 +272,16 @@ DotnetArchitecture/
 │   │   │   ├── Idempotency/                # IIdempotentCommand, IIdempotencyService, IdempotencyCheckResult
 │   │   │   ├── Specifications/             # ISpecification, BaseSpecification
 │   │   │   └── PagedResponse<T>
+│   │   ├── Events/                         # OrderCreatedIntegrationEvent (RabbitMQ Entegrasyon Olayı)
 │   │   ├── Features/
 │   │   │   ├── Auth/                       # Register, Login (Commands, DTOs, Validators)
 │   │   │   ├── Products/                   # CreateProduct, GetAllProducts, Specifications
-│   │   │   └── Orders/                     # CreateOrder, GetOrderById, Outbox Events, Specifications
-│   │   └── Interfaces/                     # IUnitOfWork, ICacheService, ICurrentUserService, IProductRepository vb.
+│   │   │   └── Orders/
+│   │   │       ├── Commands/               # CreateOrder (Idempotent)
+│   │   │       ├── Consumers/              # OrderCreatedEventConsumer (RabbitMQ Tüketicisi)
+│   │   │       ├── Events/                 # Outbox & RabbitMQ Bridge Olay İşleyicileri
+│   │   │       └── Queries/                # GetOrderById
+│   │   └── Interfaces/                     # IPaymentGateway, IUnitOfWork, ICacheService, IProductRepository vb.
 │   │
 │   ├── DotnetArchitecture.Persistence/      # Altyapı & Veritabanı Katmanı
 │   │   ├── Configurations/                 # Fluent API Entity Eşlemeleri (EF Core)
@@ -258,10 +296,10 @@ DotnetArchitecture/
 │   └── DotnetArchitecture.WebApi/           # API Sunum Katmanı
 │       ├── BackgroundServices/             # ProcessOutboxMessagesBackgroundService
 │       ├── Common/                         # HealthCheckResponseWriter (Standart JSON Raporu)
-│       ├── Controllers/                    # Auth, Products, Orders Controller'ları
+│       ├── Controllers/                    # Auth, Products, Orders, Payments Controller'ları
 │       ├── Middlewares/                    # GlobalExceptionHandler (ProblemDetails & 409 Conflict)
-│       ├── Services/                       # CurrentUserService (IHttpContextAccessor ile Claims Erişimi)
-│       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri
+│       ├── Services/                       # PaymentGatewayClient, PaymentApiSimulationHandler, CurrentUserService
+│       └── DotnetArchitecture.WebApi.http  # Kapsamlı API Test İstekleri (Polly & RabbitMQ Dahil)
 │
 ├── tests/
 │   ├── DotnetArchitecture.Domain.UnitTests/      # Domain Birim Testleri
@@ -387,3 +425,10 @@ Manuel API testlerini çalıştırmak için `src/DotnetArchitecture.WebApi/Dotne
    - `POST /api/auth/login` (1 dakika içinde 11 kez istek atıldığında: `429 Too Many Requests` ve `Retry-After: 60`)
 8. **Dağıtık Önbellekleme & Invalidation:**
    - `GET /api/products` (Redis'e yazma/okuma ve Admin yeni ürün eklediğinde önbelleğin anında silinmesi)
+9. **RabbitMQ & MassTransit Asenkron Mesajlaşma:**
+   - `POST /api/orders` (Sipariş oluştuktan sonra Outbox arka plan servisi olayı MassTransit ile RabbitMQ'ya basar ve `OrderCreatedEventConsumer` kuyruktan asenkron olarak tüketir)
+10. **Polly v8 Resilience Pipeline (Retry, Circuit Breaker, Timeout):**
+   - `POST /api/payments/process` (`simulationMode: normal` -> 200 OK)
+   - `POST /api/payments/process` (`simulationMode: flaky` -> İlk 2 istek 503, Polly Exponential Backoff ile tekrar dener, 3. denemede 200 OK döner)
+   - `POST /api/payments/process` (`simulationMode: outage` -> Peş peşe 4 çağrıda sigorta atar: **Circuit Breaker OPEN**! Sonraki istekler dış servise gitmeden 0 ms içinde doğrudan reddedilir)
+   - `POST /api/payments/process` (`simulationMode: slow` -> Dış servis 4 sn gecikir, Polly 2 sn'de **Timeout** ile işlemi keser)

@@ -180,3 +180,61 @@ GET {{Host}}/api/products?pageNumber=1&pageSize=10
 
 ### 6.2 Önbellek Denemesi 2: Cache Hit (Doğrudan Redis'ten 1-2 ms içinde döner)
 GET {{Host}}/api/products?pageNumber=1&pageSize=10
+
+
+### =========================================================================
+### 🛡️ 7. MODERN DAYANIKLILIK & HATA TOLERANSI (POLLY RESILIENCE PIPELINE)
+### =========================================================================
+
+### 7.1 Normal Ödeme İsteği (200 OK - Başarılı İşlem)
+POST {{Host}}/api/payments/process
+Content-Type: application/json
+
+{
+  "orderId": "4ff4086a-d2aa-4848-9506-f80985502169",
+  "amount": 3850.50,
+  "currency": "TRY",
+  "cardNumberMasked": "5528 **** **** 1234",
+  "simulationMode": "normal"
+}
+
+### 7.2 Geçici Ağ Hatası & Akıllı Yeniden Deneme (Flaky -> Retry Devrede)
+# İlk 2 deneme 503 Service Unavailable döner. Polly Exponential Backoff ile araya bekleme koyup tekrar dener.
+# 3. denemede istek başarıyla 200 OK döner!
+POST {{Host}}/api/payments/process
+Content-Type: application/json
+
+{
+  "orderId": "4ff4086a-d2aa-4848-9506-f80985502169",
+  "amount": 3850.50,
+  "currency": "TRY",
+  "cardNumberMasked": "5528 **** **** 1234",
+  "simulationMode": "flaky"
+}
+
+### 7.3 Genel Kesinti & Sigorta Atması (Outage -> Circuit Breaker Devrede)
+# Bu isteği peş peşe 4 kez gönderdiğinizde hata oranı %50'yi aşar ve sigorta atar (Circuit OPEN)!
+# Sonraki istekler dış servise gitmeden 0 ms içinde doğrudan reddedilir! 15 sn sonra devre yarı-açık olur.
+POST {{Host}}/api/payments/process
+Content-Type: application/json
+
+{
+  "orderId": "4ff4086a-d2aa-4848-9506-f80985502169",
+  "amount": 3850.50,
+  "currency": "TRY",
+  "cardNumberMasked": "5528 **** **** 1234",
+  "simulationMode": "outage"
+}
+
+### 7.4 Yavaş Yanıt & Zaman Aşımı (Slow -> Timeout Devrede)
+# Dış servis 4 saniye bekler. Polly'nin istek başı 2 saniye kuralı (AttemptTimeout) devreye girip isteği keser!
+POST {{Host}}/api/payments/process
+Content-Type: application/json
+
+{
+  "orderId": "4ff4086a-d2aa-4848-9506-f80985502169",
+  "amount": 3850.50,
+  "currency": "TRY",
+  "cardNumberMasked": "5528 **** **** 1234",
+  "simulationMode": "slow"
+}
