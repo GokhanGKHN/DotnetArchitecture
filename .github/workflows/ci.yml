@@ -1,0 +1,60 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    name: Build, Test & Dockerize (.NET 10)
+    runs-on: ubuntu-latest
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "YourPassword123."
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourPassword123.' -C -Q 'SELECT 1' || exit 1"                              
+          --health-interval 10s                                                                                                                         
+          --health-timeout 5s                                                                                                                           
+          --health-retries 10                                                                                                                           
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"                                                                                                                 
+          --health-interval 10s                                                                                                                         
+          --health-timeout 5s                                                                                                                           
+          --health-retries 5                                                                                                                            
+
+    steps:
+      - name: 📥 Kodu Çek (Checkout)
+        uses: actions/checkout@v4
+
+      - name: ⚙️ .NET 10 SDK Kurulumu
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          include-prerelease: true
+
+      - name: 📦 Bağımlılıkları Yükle (Restore)
+        run: dotnet restore
+
+      - name: 🔨 Projeyi Derle (Build Release)
+        run: dotnet build --no-restore --configuration Release
+
+      - name: 🧪 Tüm Testleri Çalıştır (Unit & Integration Tests)
+        env:
+          ConnectionStrings__DefaultConnection: "Server=localhost;Database=DotnetArchitectureDb;User Id=sa;Password=YourPassword123.;TrustServerCertificate=True;"
+          ConnectionStrings__Redis: "localhost:6379"
+        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: 🐳 Docker İmaj Derleme Testi
+        run: docker build -f src/DotnetArchitecture.WebApi/Dockerfile .
