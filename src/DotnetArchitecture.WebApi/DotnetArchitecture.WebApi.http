@@ -51,6 +51,7 @@ Content-Type: application/json
   "password": "Password123*"
 }
 
+###
 @memberToken = {{loginMember.response.body.token}}
 
 
@@ -101,6 +102,7 @@ GET {{Host}}/api/products?pageNumber=1&pageSize=10&sortBy=price&isDescending=tru
 
 ### 3.1 Sipariş Oluştur (Member Olarak)
 # Başarılı olursa Outbox tablosuna olay yazılır ve arka plan servisi işler
+    ### 3.1 Sipariş Oluştur (Member Olarak)
 POST {{Host}}/api/orders
 Content-Type: application/json
 Authorization: Bearer {{memberToken}}
@@ -109,12 +111,12 @@ Authorization: Bearer {{memberToken}}
   "customerId": "89605202-b062-4aa8-9f37-123456789abc",
   "items": [
     {
-      "productId": "7da084e7-4786-42d4-bb06-08de7226f30e",
-      "quantity": 2,
-      "unitPrice": 8500.00
+      "productId": "50cdfcaf-136d-463f-901a-227ca5bdf4b1",
+      "quantity": 1
     }
   ]
 }
+
 
 ### 3.2 Idempotent Sipariş Oluştur (Aynı Idempotency-Key ile Çift Gönderim Koruması)
 # Bu isteği peş peşe birden çok kez gönderdiğinizde:

@@ -1,3 +1,4 @@
+using MassTransit;
 using System.Text;
 using System.Threading.RateLimiting;
 using DotnetArchitecture.Application;
@@ -19,6 +20,24 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<DotnetArchitecture.Application.Interfaces.ICurrentUserService, DotnetArchitecture.WebApi.Services.CurrentUserService>();
 builder.Services.AddApplicationServices();
 builder.Services.AddPersistenceServices(builder.Configuration);
+// 2. MassTransit & RabbitMQ Yapılandırması                                                                                                             
+builder.Services.AddMassTransit(x =>
+{
+    // Application katmanındaki tüm Consumer sınıflarını otomatik bul ve kaydet
+    x.AddConsumers(typeof(DotnetArchitecture.Application.DependencyInjection).Assembly);
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var rabbitMqConn = builder.Configuration.GetConnectionString("RabbitMq")
+                           ?? "amqp://guest:guest@localhost:5672";
+
+        cfg.Host(new Uri(rabbitMqConn));
+
+        // Kuyrukları ve endpoint'leri MassTransit otomatik isimlendirip bağlasın
+        cfg.ConfigureEndpoints(context);
+    });
+});
+
 
 // 2. Global Exception Handler & ProblemDetails kayıtları
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

@@ -12,6 +12,15 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
       mssql:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
@@ -23,7 +32,7 @@ jobs:
           --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourPassword123.' -C -Q 'SELECT 1' || exit 1"                              
           --health-interval 10s                                                                                                                         
           --health-timeout 5s                                                                                                                           
-          --health-retries 10                                                                                                                           
+          --health-retries 10
 
       redis:
         image: redis:7-alpine
@@ -33,7 +42,7 @@ jobs:
           --health-cmd "redis-cli ping"                                                                                                                 
           --health-interval 10s                                                                                                                         
           --health-timeout 5s                                                                                                                           
-          --health-retries 5                                                                                                                            
+          --health-retries 5
 
     steps:
       - name: 📥 Kodu Çek (Checkout)
@@ -55,6 +64,8 @@ jobs:
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost;Database=DotnetArchitectureDb;User Id=sa;Password=YourPassword123.;TrustServerCertificate=True;"
           ConnectionStrings__Redis: "localhost:6379"
+          ConnectionStrings__RabbitMq: "amqp://guest:guest@localhost:5672"
         run: dotnet test --no-build --configuration Release --verbosity normal
+
       - name: 🐳 Docker İmaj Derleme Testi
         run: docker build -f src/DotnetArchitecture.WebApi/Dockerfile .

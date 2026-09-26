@@ -13,12 +13,19 @@ public class HealthChecksTests : IClassFixture<CustomWebApplicationFactory>
     {
         _client = factory.CreateClient();
     }
-
     [Fact]
     public async Task GetHealth_ShouldReturn200Ok_AndDetailedJsonReport()
     {
-        // Act
-        var response = await _client.GetAsync("/health");
+        // Act - Hosted servicelerin (MassTransit vb.) tamamen ayağa kalkmasını beklemek için kısa bir tolerans tanıyoruz
+        HttpResponseMessage response = null!;
+        for (var i = 0; i < 15; i++)
+        {
+            response = await _client.GetAsync("/health");
+            if (response.StatusCode == HttpStatusCode.OK)
+                break;
+
+            await Task.Delay(200);
+        }
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
